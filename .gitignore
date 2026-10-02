@@ -31,3 +31,8 @@ server/model/
 # repo needs — and the store copy changes on its own schedule anyway.
 RELEASE.md
 STORE-SUBMISSION.md
+
+# Promo video: rendered frames and stills are scratch; regenerate with promo/render.py.
+promo/build/
+# The master is over GitHub's 100 MB file limit; the videos are outputs, not source.
+promo/*.mp4

@@ -1,0 +1,1092 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HappySubs Showreel</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!--
+  A 30-second motion piece for HappySubs, built as a deterministic timeline:
+  every frame is a pure function of t, so the same page plays in a browser for
+  preview and renders frame-exact to video (render.py calls window.__seek(t)).
+  Brand: the site's near-black and signal red, the translation pink from the
+  overlay, the popup's blush glass — and the wordmark's two stacked bars (white
+  over red), which read as two lines of subtitle and carry the transitions.
+-->
+<style>
+:root{
+  --red:#ff0033; --logo:#e4262c; --pink:#f7c9c8; --ink:#0b0b0c; --white:#f5f5f5; --dim:#a3a3a3;
+  --rose-ink:#3b2a2e; --rose-soft:#937b80; --accent:#df5550;
+  --sans:"SF Pro Display","PingFang SC","Hiragino Sans","Apple SD Gothic Neo",sans-serif;
+  --mono:Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#000;overflow:hidden}
+#viewport{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0}
+#stage{position:absolute;inset:0;overflow:hidden;background:var(--ink);font-family:var(--sans);color:#fff;-webkit-font-smoothing:antialiased}
+#cam{position:absolute;inset:0;transform-origin:960px 540px}
+.scene{position:absolute;left:0;top:0;width:1920px;height:1080px;overflow:hidden;display:none}
+.a{position:absolute}
+.hl{font-weight:800;letter-spacing:-.035em;line-height:1.02;white-space:nowrap}
+.red{color:var(--red)}
+.w{display:inline-block;overflow:hidden;vertical-align:bottom;padding:.06em .05em .16em;margin:-.06em -.05em -.16em}
+.wi{display:inline-block;transform:translateY(115%)}
+/* Subtitle plates — mirror overlay.css: rounded plate hugging the words, soft
+   text shadow, original white, translation pink. */
+.cap{display:inline-block;background:rgba(0,0,0,.72);border-radius:10px;padding:5px 18px 7px;font-weight:600;
+  text-shadow:0 1px 2px rgba(0,0,0,.6);white-space:nowrap;line-height:1.3;letter-spacing:.005em}
+.cap.o{color:#fff}
+.cap.t{color:var(--pink)}
+.caps{position:absolute;left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:7px}
+.mono{font-family:var(--mono)}
+
+/* ---------- player ---------- */
+.player{position:absolute;width:1280px;height:720px;border-radius:16px;overflow:hidden;background:#000;
+  box-shadow:0 40px 120px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.08)}
+.player .foot{position:absolute;inset:0}
+.player .pgrad{position:absolute;left:0;right:0;bottom:0;height:200px;background:linear-gradient(transparent,rgba(0,0,0,.65))}
+.player .ctl{position:absolute;left:0;right:0;bottom:0;height:64px;padding:0 24px}
+.player .bar{position:absolute;left:24px;right:24px;top:0;height:5px;background:rgba(255,255,255,.25);border-radius:3px}
+.player .buf{position:absolute;left:0;top:0;bottom:0;width:62%;background:rgba(255,255,255,.35);border-radius:3px}
+.player .fil{position:absolute;left:0;top:0;bottom:0;width:30%;background:var(--red);border-radius:3px}
+.player .knob{position:absolute;top:-5px;width:15px;height:15px;margin-left:-7px;border-radius:50%;background:var(--red)}
+.player .row{position:absolute;left:24px;right:24px;top:16px;height:40px;display:flex;align-items:center;gap:22px;font-size:17px;font-weight:500;color:#eee}
+.player .row svg{width:28px;height:28px;fill:#fff}
+.player .sp{flex:1}
+.player .cc{position:relative;font-size:13px;font-weight:800;border:2.5px solid #fff;border-radius:5px;padding:1px 4px;letter-spacing:.04em}
+.player .cc:after{content:"";position:absolute;left:-2px;right:-2px;bottom:-9px;height:3.5px;background:var(--red);border-radius:2px}
+.player .ccx{position:absolute;left:-6px;top:50%;width:52px;height:4px;background:var(--red);transform:rotate(-35deg);opacity:0;border-radius:2px}
+.player .whiteout{position:absolute;inset:0;background:#f5f5f5;opacity:0}
+
+/* ---------- theatre footage ---------- */
+.th{position:absolute;left:0;top:0;width:1280px;height:720px;overflow:hidden;background:#120607}
+.th>*{position:absolute}
+.th-wall{inset:0;background:linear-gradient(#1d0b0c,#0e0506)}
+.th-spot{left:340px;top:90px;width:600px;height:480px;border-radius:50%;
+  background:radial-gradient(ellipse at center,rgba(255,214,160,.62),rgba(255,170,110,.22) 45%,transparent 72%)}
+.th-floor{left:0;right:0;bottom:0;height:200px;background:linear-gradient(#2e180c,#100703);box-shadow:0 -1px 0 rgba(255,200,140,.18)}
+.th-pool{left:330px;bottom:46px;width:620px;height:140px;border-radius:50%;
+  background:radial-gradient(ellipse at center,rgba(255,226,170,.6),rgba(255,200,140,.14) 55%,transparent 72%)}
+.th-cone{left:290px;top:-30px;width:700px;height:720px;transform-origin:50% 0;
+  clip-path:polygon(45% 0,55% 0,100% 100%,0 100%);
+  background:linear-gradient(rgba(255,240,210,.30),rgba(255,230,190,.05));filter:blur(8px);mix-blend-mode:screen}
+.th-actor{left:520px;bottom:62px;width:240px;height:400px;filter:drop-shadow(0 0 7px rgba(255,190,120,.45))}
+.th-dust{inset:0}
+.th-dust i{position:absolute;width:3px;height:3px;border-radius:50%;background:#ffe9c9}
+.th-cur{top:0;bottom:0;width:250px;
+  background:repeating-linear-gradient(90deg,#4a0910 0,#8c1622 22px,#5c0c15 38px,#2e0509 50px)}
+.th-cur.l{left:0;clip-path:polygon(0 0,100% 0,82% 72%,64% 100%,0 100%);box-shadow:inset -30px 0 40px rgba(0,0,0,.5)}
+.th-cur.r{right:0;clip-path:polygon(0 0,100% 0,100% 100%,36% 100%,18% 72%)}
+.th-val{left:0;right:0;top:0;height:92px;background:repeating-linear-gradient(90deg,#6b0f19 0,#a01b28 32px,#6b0f19 64px);
+  -webkit-mask:radial-gradient(circle 46px at 46px 104px,transparent 45px,#000 46px) 0 0/92px 100% repeat-x;
+  filter:drop-shadow(0 12px 16px rgba(0,0,0,.7))}
+.th-vig{inset:0;background:radial-gradient(ellipse at 50% 55%,transparent 45%,rgba(0,0,0,.6) 100%)}
+
+/* ---------- scene A: the feed wall ---------- */
+#wall .card{position:absolute;width:320px}
+#wall .thumb{position:relative;width:320px;height:180px;border-radius:12px;overflow:hidden}
+#wall .thumb>div{position:absolute}
+#wall .dur{right:8px;bottom:8px;padding:1px 6px;border-radius:5px;background:rgba(0,0,0,.8);font:600 15px var(--sans);color:#fff}
+#wall .wp{left:0;bottom:0;height:4px;background:var(--red)}
+#wall .meta{display:flex;gap:12px;margin-top:12px}
+#wall .av{width:36px;height:36px;border-radius:50%;flex:none}
+#wall .tl{flex:1;display:flex;flex-direction:column;gap:8px;padding-top:3px}
+#wall .tl i{display:block;height:12px;border-radius:6px;background:#2b2b2e}
+.stampbox{position:absolute;left:960px;top:172px;transform-origin:center}
+.stamp{position:absolute;left:0;top:0;transform:translate(-50%,-50%) rotate(-3deg);background:var(--red);color:#fff;
+  font-weight:900;font-size:104px;letter-spacing:-.03em;padding:2px 34px 8px;border-radius:14px;white-space:nowrap;
+  box-shadow:0 20px 60px rgba(255,0,51,.45)}
+.jag-r{clip-path:polygon(0 0,94% 0,100% 18%,95% 36%,100% 54%,95% 72%,100% 90%,96% 100%,0 100%)}
+.jag-l{clip-path:polygon(4% 0,100% 0,100% 100%,0 100%,5% 82%,0 64%,5% 46%,0 28%,5% 10%)}
+
+/* ---------- scene B: logo ---------- */
+#bWM svg{display:block;width:1200px;overflow:visible}
+#bWM path{transform-box:fill-box;transform-origin:50% 100%}
+.bar{position:absolute;left:0;top:0}
+
+/* ---------- popup (from popup.html) ---------- */
+.pop{position:absolute;width:320px;padding:14px 14px 16px;font:13px/1.5 var(--sans);letter-spacing:.02em;color:var(--rose-ink);
+  border-radius:16px;overflow:hidden;text-align:left;
+  background:radial-gradient(190px 190px at calc(100% + 24px) -28px,rgba(255,112,112,.6),transparent 70%),
+    radial-gradient(230px 230px at -46px calc(100% + 46px),rgba(255,170,140,.55),transparent 70%),
+    linear-gradient(168deg,#fff8f8 0%,#ffecec 46%,#ffdedc 100%);
+  box-shadow:0 30px 80px rgba(0,0,0,.45),inset 0 0 0 1px rgba(255,255,255,.7)}
+.pop .tb{display:flex;align-items:center;justify-content:space-between;margin:0 2px 10px;height:30px}
+.pop .tb svg{height:19px;width:auto;color:var(--rose-ink)}
+.pop .gear{font-size:19px;line-height:1}
+.pop .main{background:rgba(255,255,255,.58);border:1px solid rgba(255,255,255,.85);border-radius:14px;
+  box-shadow:0 6px 22px rgba(163,92,92,.13);padding:10px 12px 12px}
+.pop .r{display:flex;align-items:center;justify-content:space-between;margin:9px 0;gap:8px;white-space:nowrap}
+.pop .cbx{display:inline-block;width:15px;height:15px;border-radius:4px;border:1.5px solid #c4a9ad;background:#fff;vertical-align:-3px;margin-right:7px;position:relative}
+.pop .cbx.on{background:var(--accent);border-color:var(--accent)}
+.pop .cbx.on:after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.pop .muted{color:var(--rose-soft);font-size:12px}
+.pop .tabs{display:flex;gap:4px;margin:10px 0 12px;padding:4px;border-radius:12px;background:rgba(255,255,255,.45);border:1px solid rgba(255,255,255,.85)}
+.pop .tabs span{flex:1;text-align:center;padding:7px 6px;font-weight:600;border-radius:9px;color:var(--rose-soft)}
+.pop .tabs .on{color:var(--accent);background:rgba(223,85,80,.16);font-weight:700}
+.pop .fld{position:relative;flex:1 1 auto;min-width:0;height:30px;line-height:28px;padding:0 26px 0 8px;border-radius:9px;
+  border:1px solid rgba(190,125,125,.24);background:rgba(255,255,255,.82);overflow:hidden;white-space:nowrap}
+.pop .fld:after{content:"";position:absolute;right:10px;top:10px;width:6px;height:6px;border:solid var(--rose-ink);border-width:0 1.6px 1.6px 0;transform:rotate(45deg)}
+.pop .fld .roll{position:absolute;left:8px;top:0}
+.pop .btn{height:30px;line-height:28px;padding:0 12px;border-radius:9px;border:1px solid rgba(190,125,125,.24);background:rgba(255,255,255,.82)}
+.pop .status{margin:10px 12px 0;font-size:12px;color:var(--rose-soft);white-space:nowrap}
+.pop .list{position:absolute;left:0;right:0;top:32px;background:#fff;border-radius:10px;box-shadow:0 12px 30px rgba(120,50,50,.25);padding:4px;z-index:3;transform-origin:50% 0}
+.pop .list div{padding:3px 8px;border-radius:6px;white-space:nowrap}
+
+/* ---------- scene D: timeline ---------- */
+.tcard{position:absolute;left:120px;top:420px;width:1680px;height:470px;border-radius:20px;background:#121214;border:1px solid rgba(255,255,255,.1);overflow:hidden}
+.tcard .lab{position:absolute;left:28px;font:600 21px var(--sans);color:#8d8d93}
+.tblk{position:absolute;height:62px;border-radius:10px;padding:0 16px;font:600 23px/62px var(--sans);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tblk.o{background:#f5f5f5;color:#111}
+.tblk.t{background:var(--pink);color:#3b1d22}
+.wbar{position:absolute;width:4px;border-radius:2px}
+
+/* ---------- scene G: tiles ---------- */
+.tile{position:absolute;width:420px;height:334px;border-radius:26px;background:#151517;border:1px solid rgba(255,255,255,.1);overflow:hidden;padding:30px 30px}
+.tile .tt{position:absolute;left:30px;bottom:58px;font:700 34px var(--sans);letter-spacing:-.01em;white-space:nowrap}
+.tile .ts{position:absolute;left:30px;bottom:24px;font:500 21px var(--sans);color:#9a9aa0;white-space:nowrap}
+.tile.blush{background:radial-gradient(260px 260px at 110% -10%,rgba(255,112,112,.55),transparent 70%),linear-gradient(168deg,#fff8f8,#ffdedc);color:var(--rose-ink);border-color:rgba(255,255,255,.8)}
+.tile.blush .ts{color:var(--rose-soft)}
+.chip{display:inline-block;padding:7px 16px;border-radius:999px;border:1px solid rgba(255,255,255,.18);font:600 23px var(--sans);background:rgba(255,255,255,.06);white-space:nowrap}
+.key{display:inline-flex;align-items:center;justify-content:center;width:86px;height:86px;border-radius:16px;background:linear-gradient(#2b2b30,#1d1d21);
+  border:1px solid rgba(255,255,255,.16);box-shadow:0 6px 0 #0a0a0b,0 8px 16px rgba(0,0,0,.5);font:600 42px var(--sans)}
+
+/* ---------- scene H: install ---------- */
+.win{position:absolute;left:770px;top:160px;width:1060px;height:740px;border-radius:16px;overflow:hidden;background:#fff;
+  box-shadow:0 50px 100px rgba(140,50,50,.28),0 0 0 1px rgba(0,0,0,.06)}
+.win-top{height:46px;background:#efe7e7;display:flex;align-items:flex-end;padding:0 16px;gap:8px;position:relative}
+.win-top .tl{width:13px;height:13px;border-radius:50%;position:absolute;top:16px}
+.win-tab{margin-left:76px;height:36px;background:#fff;border-radius:10px 10px 0 0;padding:0 16px;display:flex;align-items:center;gap:9px;font:500 14px var(--sans);color:#333;width:300px}
+.win-bar{height:52px;display:flex;align-items:center;gap:14px;padding:0 16px;border-bottom:1px solid #eee;position:relative}
+.win-bar svg{width:20px;height:20px;stroke:#666;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.addr{flex:1;height:34px;border-radius:17px;background:#f1eded;display:flex;align-items:center;gap:8px;padding:0 14px;font:500 15px var(--sans);color:#333;position:relative;overflow:hidden}
+.win-body{position:absolute;left:0;right:0;top:98px;bottom:0;overflow:hidden;background:#0f0f0f}
+.site{position:absolute;inset:0;text-align:center;color:#f5f5f5}
+.site .nav{height:52px;border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:space-between;padding:0 30px}
+.site .nav svg{height:16px;color:#f5f5f5}
+.site h1{margin:18px 0 10px;font:800 46px/1.1 var(--sans);letter-spacing:-.02em;background:linear-gradient(135deg,#fff,#bbb);-webkit-background-clip:text;color:transparent}
+.site .vp{display:inline-block;color:#a3a3a3;border:1px solid rgba(255,255,255,.22);border-radius:999px;padding:2px 10px;font-size:13px}
+.site p{color:#a3a3a3;font-size:16px;line-height:1.55;margin:14px auto 22px;max-width:560px}
+.site .cta{display:inline-flex;align-items:center;gap:8px;background:var(--red);color:#fff;padding:13px 28px;border-radius:999px;font:700 17px var(--sans);box-shadow:0 8px 20px rgba(255,0,51,.3);position:relative;overflow:hidden}
+.site .cta2{display:inline-flex;color:#f5f5f5;padding:13px 26px;border-radius:999px;font:600 17px var(--sans);border:1px solid rgba(255,255,255,.34);margin-left:12px}
+.stepc{position:absolute;width:58px;height:58px;border-radius:50%;border:2.5px solid var(--accent);color:var(--accent);font:800 26px/53px var(--sans);text-align:center}
+.stepc .fillc{position:absolute;inset:-3px;border-radius:50%;background:var(--accent)}
+.stepc .ck{position:absolute;left:19px;top:13px;width:14px;height:24px;border:solid #fff;border-width:0 4px 4px 0;transform:rotate(45deg)}
+.stepl{position:absolute;font:600 36px var(--sans);color:var(--rose-ink);white-space:nowrap;letter-spacing:-.01em}
+
+/* ---------- scene I: montage ---------- */
+.mshot{position:absolute;inset:0;overflow:hidden}
+.mword{position:absolute;left:110px;top:84px;font:900 190px/1 var(--sans);letter-spacing:-.05em;color:#fff;text-shadow:0 10px 60px rgba(0,0,0,.35)}
+.mtag{display:inline-block;padding:5px 14px;border-radius:999px;background:rgba(0,0,0,.55);font:700 20px var(--mono);color:#fff;letter-spacing:.04em;margin-bottom:6px}
+.mcaps{position:absolute;left:0;right:0;bottom:92px;display:flex;flex-direction:column;align-items:center;gap:8px}
+
+/* ---------- overlays ---------- */
+#wipe{position:absolute;inset:0;pointer-events:none;display:none}
+#wipe div{position:absolute;top:-80px;height:1240px;width:2600px;transform-origin:0 50%}
+#grain{position:absolute;inset:-64px;pointer-events:none;mix-blend-mode:overlay;opacity:.11}
+#vig{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 58%,rgba(0,0,0,.42) 100%)}
+#flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+#fade{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none}
+#measure{position:absolute;left:-9999px;top:0;visibility:hidden;font-family:var(--sans)}
+
+/* ---------- preview UI (hidden when rendering) ---------- */
+#ui{position:fixed;left:0;right:0;bottom:0;height:46px;display:flex;align-items:center;gap:12px;padding:0 14px;background:rgba(20,20,22,.92);color:#ddd;font:13px var(--mono);z-index:9}
+#ui input{flex:1}
+#ui button{background:#333;color:#fff;border:0;border-radius:6px;padding:6px 12px;font:inherit;cursor:pointer}
+body.render #ui{display:none}
+</style>
+</head>
+<body>
+<div id="viewport"><div id="stage">
+  <div id="cam"></div>
+  <div id="wipe"><div id="wipeW" style="background:#f5f5f5"></div><div id="wipeR" style="background:var(--red)"></div></div>
+  <div id="flash"></div>
+  <div id="vig"></div>
+  <div id="grain"></div>
+  <div id="fade"></div>
+</div></div>
+<div id="measure"></div>
+<svg width="0" height="0" style="position:absolute">
+  <filter id="mbx" x="-20%" y="-5%" width="140%" height="110%"><feGaussianBlur id="mbxv" stdDeviation="0 0"/></filter>
+  <filter id="mbx2" x="-20%" y="-5%" width="140%" height="110%"><feGaussianBlur id="mbxv2" stdDeviation="0 0"/></filter>
+</svg>
+<div id="ui"><button id="play">Play</button><input id="scrub" type="range" min="0" max="30" step="0.001" value="0"><span id="tc">0.00</span></div>
+
+<script src="wordmark.js"></script>
+<script>
+"use strict";
+/* =====================================================================
+   Toolkit
+   ===================================================================== */
+const DUR = 30;
+const clamp = (x, a = 0, b = 1) => x < a ? a : x > b ? b : x;
+const lerp = (a, b, t) => a + (b - a) * t;
+const inv = (a, b, x) => clamp((x - a) / (b - a));
+const E = {
+  lin: t => t,
+  inQuad: t => t * t, outQuad: t => 1 - (1 - t) * (1 - t),
+  inCubic: t => t * t * t, outCubic: t => 1 - Math.pow(1 - t, 3),
+  inOutCubic: t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2,
+  outQuart: t => 1 - Math.pow(1 - t, 4), inQuart: t => t * t * t * t,
+  inOutQuart: t => t < .5 ? 8 * t ** 4 : 1 - Math.pow(-2 * t + 2, 4) / 2,
+  outQuint: t => 1 - Math.pow(1 - t, 5),
+  outExpo: t => t >= 1 ? 1 : 1 - Math.pow(2, -10 * t),
+  inExpo: t => t <= 0 ? 0 : Math.pow(2, 10 * t - 10),
+  inOutExpo: t => t <= 0 ? 0 : t >= 1 ? 1 : t < .5 ? Math.pow(2, 20 * t - 10) / 2 : (2 - Math.pow(2, -20 * t + 10)) / 2,
+  outBack: t => { const s = 1.9; return 1 + (s + 1) * Math.pow(t - 1, 3) + s * Math.pow(t - 1, 2); },
+  outBackS: t => { const s = 1.2; return 1 + (s + 1) * Math.pow(t - 1, 3) + s * Math.pow(t - 1, 2); },
+  inOutSine: t => -(Math.cos(Math.PI * t) - 1) / 2,
+};
+const P = (t, a, b, e = E.lin) => e(inv(a, b, t));
+// Damped spring step response, 0 → 1 (overshoots when damp < 1).
+function spring(dt, freq = 2, damp = .5) {
+  if (dt <= 0) return 0;
+  const w = 2 * Math.PI * freq, wd = w * Math.sqrt(1 - damp * damp);
+  return 1 - Math.exp(-damp * w * dt) * (Math.cos(wd * dt) + (damp * w / wd) * Math.sin(wd * dt));
+}
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const hash = n => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const noise = x => { const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f); return lerp(hash(i), hash(i + 1), u) * 2 - 1; };
+const $ = id => document.getElementById(id);
+const h = (html) => { const d = document.createElement('div'); d.innerHTML = html.trim(); return d.firstElementChild; };
+const tf = (el, s) => { el.style.transform = s; };
+const op = (el, v) => { el.style.opacity = v; };
+const vis = (el, on) => { el.style.visibility = on ? 'visible' : 'hidden'; };
+const beat = (t, from = 6, to = 30) => (t < from || t > to) ? 0 : Math.exp(-((t - from) % .5) * 7);
+
+const words = (text, cls = '') => text.split(' ').map(w => `<span class="w"><span class="wi ${cls}">${w}</span></span>`).join(' ');
+// Word-by-word mask reveal; each word rises out of its own clip box.
+function wordsAnim(root, t, tin, tout = 1e9, st = .055, dur = .5, ost = .03) {
+  const ws = root.__wi || (root.__wi = [...root.querySelectorAll('.wi')]);
+  ws.forEach((w, i) => {
+    const pi = E.outExpo(inv(tin + i * st, tin + i * st + dur, t));
+    const po = E.inCubic(inv(tout + i * ost, tout + i * ost + .3, t));
+    w.style.transform = `translateY(${(1 - pi) * 115 - po * 115}%)`;
+  });
+}
+const measureBox = $('measure');
+function measure(html, style) {
+  const s = document.createElement('span');
+  s.className = 'cap'; s.style.cssText = style; s.innerHTML = html;
+  measureBox.appendChild(s); const w = s.offsetWidth; s.remove(); return w;
+}
+
+/* =====================================================================
+   Brand marks
+   ===================================================================== */
+const H_PATH = WM_PATHS[0];
+function wordmarkSVG(barColor = 'currentColor') {
+  return `<svg viewBox="139 553 7754 1156"><g fill="currentColor">${WM_PATHS.map((d, i) => `<path class="wl" d="${d}"/>`).join('')}
+    <rect class="wb1" x="7532.75" y="1241.83" width="359.99" height="136.04" fill="${barColor}"/></g>
+    <rect class="wb2" x="7532.75" y="1377.87" width="359.99" height="136.04" fill="#e4262c"/></svg>`;
+}
+const iconSVG = (fill = '#e4262c') => `<svg viewBox="0 0 128 128"><g fill="${fill}"><path transform="translate(27,10) scale(0.0786,0.0777) translate(-139.4,-569.38)" d="${H_PATH}"/><rect x="9" y="95" width="110" height="23" rx="11.5"/></g></svg>`;
+
+/* =====================================================================
+   Reusable pieces: theatre footage, player chrome, popup
+   ===================================================================== */
+const ACTOR = `<svg class="th-actor" viewBox="0 0 240 400"><g fill="#0b0405" stroke="#0b0405" stroke-linecap="round">
+  <ellipse cx="96" cy="52" rx="23" ry="27" stroke="none"/>
+  <path d="M88 74h18v16H88z" stroke="none"/>
+  <path d="M62 94Q96 80 130 94L138 192Q146 262 158 340L36 340Q48 262 56 192Z" stroke="none"/>
+  <path d="M124 100Q160 104 192 86" fill="none" stroke-width="17"/>
+  <circle cx="204" cy="74" r="16" stroke="none"/><path d="M196 84h17v11h-17z" stroke="none"/>
+  <path d="M66 104Q50 164 62 226" fill="none" stroke-width="16"/>
+  <rect x="70" y="334" width="21" height="64" rx="6" stroke="none"/><rect x="104" y="334" width="21" height="64" rx="6" stroke="none"/>
+</g></svg>`;
+function theatreHTML() {
+  let dust = ''; for (let i = 0; i < 34; i++) dust += '<i></i>';
+  return `<div class="th"><div class="th-wall"></div><div class="th-spot"></div><div class="th-floor"></div><div class="th-pool"></div>
+    <div class="th-cone"></div>${ACTOR}<div class="th-dust">${dust}</div>
+    <div class="th-cur l"></div><div class="th-cur r"></div><div class="th-val"></div><div class="th-vig"></div></div>`;
+}
+function updateTheatre(root, t) {
+  const c = root.__th || (root.__th = {
+    cone: root.querySelector('.th-cone'), spot: root.querySelector('.th-spot'), pool: root.querySelector('.th-pool'),
+    dust: [...root.querySelectorAll('.th-dust i')], actor: root.querySelector('.th-actor')
+  });
+  const sw = Math.sin(t * .9) * 2.2;
+  tf(c.cone, `rotate(${sw}deg)`);
+  tf(c.spot, `translateX(${sw * 6}px)`);
+  tf(c.pool, `translateX(${-sw * 9}px)`);
+  tf(c.actor, `translateY(${Math.sin(t * 1.3) * 2}px)`);
+  c.dust.forEach((d, i) => {
+    const sp = 18 + hash(i) * 30, y = 640 - ((t * sp + hash(i + 9) * 640) % 640);
+    const x = 470 + hash(i + 3) * 340 + Math.sin(t * (.6 + hash(i) * .8) + i) * 26 + (640 - y) * (hash(i + 5) - .5) * .5;
+    d.style.left = x + 'px'; d.style.top = y + 'px'; d.style.opacity = .25 + .55 * (0.5 + 0.5 * Math.sin(t * 3 + i));
+  });
+}
+const ICON = {
+  play: '<svg viewBox="0 0 24 24"><path d="M7 4.5v15l12.5-7.5z"/></svg>',
+  pause: '<svg viewBox="0 0 24 24"><path d="M6 4h4.5v16H6zM13.5 4H18v16h-4.5z"/></svg>',
+  next: '<svg viewBox="0 0 24 24"><path d="M5 5l10 7-10 7zM16.5 5H19v14h-2.5z"/></svg>',
+  vol: '<svg viewBox="0 0 24 24"><path d="M3 9h4l5-4.5v15L7 15H3z"/><path d="M15.5 8.5a5 5 0 010 7M18 6a8.5 8.5 0 010 12" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>',
+  gear: '<svg viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7zm8.6 4.9l1.9 1.5-1.9 3.3-2.3-.9a7.8 7.8 0 01-1.9 1.1L16 21h-3.8l-.4-2.6a7.8 7.8 0 01-1.9-1.1l-2.3.9-1.9-3.3 1.9-1.5a7.8 7.8 0 010-2.2L5.7 9.7l1.9-3.3 2.3.9a7.8 7.8 0 011.9-1.1L12.2 3H16l.4 2.6a7.8 7.8 0 011.9 1.1l2.3-.9 1.9 3.3-1.9 1.5a7.8 7.8 0 010 2.2z" transform="translate(-2 0)"/></svg>',
+  full: '<svg viewBox="0 0 24 24"><path d="M3 9V3h6v2.5H5.5V9zM15 3h6v6h-2.5V5.5H15zM21 15v6h-6v-2.5h3.5V15zM9 21H3v-6h2.5v3.5H9z"/></svg>',
+};
+function playerHTML(id, footage, capsHTML = '', bottom = 86) {
+  return `<div class="player" id="${id}"><div class="foot">${footage}</div><div class="pgrad"></div>
+    <div class="caps" style="bottom:${bottom}px">${capsHTML}</div>
+    <div class="ctl"><div class="bar"><div class="buf"></div><div class="fil"></div><div class="knob"></div></div>
+      <div class="row">${ICON.pause}${ICON.next}${ICON.vol}<span class="time">1:24 / 12:08</span><span class="sp"></span>
+      <span style="position:relative"><span class="cc">CC</span><span class="ccx"></span></span>${ICON.gear}${ICON.full}</div></div>
+    <div class="whiteout"></div></div>`;
+}
+function updatePlayerChrome(p, t, t0 = 0, base = .3) {
+  const c = p.__pc || (p.__pc = { fil: p.querySelector('.fil'), knob: p.querySelector('.knob'), time: p.querySelector('.time') });
+  const f = base + (t - t0) * .004;
+  c.fil.style.width = (f * 100) + '%'; c.knob.style.left = (f * 100) + '%';
+  const secs = Math.floor(f * 728); c.time.textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')} / 12:08`;
+}
+function popupHTML(id, langLabel = '中文 (简体)') {
+  return `<div class="pop" id="${id}">
+    <div class="tb">${wordmarkSVG()}<span class="gear">⚙</span></div>
+    <div class="main">
+      <div class="r"><span><span class="cbx on"></span>Enable</span><span class="muted">YouTube · CC on</span></div>
+      <div class="tabs"><span class="on">Translate</span><span>Live transcribe</span></div>
+      <div class="r"><span><span class="cbx"></span>Translation only</span></div>
+      <div class="r"><span>2nd language</span><div class="fld lang"><span class="roll">${langLabel}</span></div></div>
+      <div class="r"><span>Translator</span><div class="fld">Google Translate (free)</div></div>
+      <div class="r"><span>Export subtitles</span><div class="fld" style="flex:0 1 auto;width:112px">Both languages</div><div class="btn">Download</div></div>
+    </div>
+    <div class="status">Translated · Google · 214 lines</div></div>`;
+}
+
+/* =====================================================================
+   Scene registry
+   ===================================================================== */
+const cam = $('cam');
+const SCENES = [];
+function scene(id, a, b, build, update) {
+  const el = document.createElement('div'); el.className = 'scene'; el.id = id; cam.appendChild(el);
+  const s = { id, a, b, el, on: false, update }; build(el, s); SCENES.push(s); return s;
+}
+// Impacts drive camera shake and the zoom punch.
+const IMPACTS = [[4.0, 12], [4.5, 12], [5.0, 12], [6.0, 26], [12.7, 5], [14.0, 7], [14.92, 7], [18.0, 6],
+  [24.0, 9], [24.5, 9], [25.0, 9], [25.5, 9], [26.0, 22]];
+
+/* ---------------------------------------------------------------------
+   A · 0.0–6.0  The problem: a feed, the perfect video, a language you
+   don't speak, and the ways other tools fail. Collapses into two bars.
+   --------------------------------------------------------------------- */
+const FOREIGN = [
+  'Sein oder Nichtsein, das ist hier die Frage.', '生きるべきか、死ぬべきか、それが問題だ。', 'Быть или не быть, вот в чём вопрос.',
+  '사느냐 죽느냐, 그것이 문제로다.', 'होना या न होना, यही प्रश्न है।', 'Να ζει κανείς ή να μη ζει, ιδού η απορία.',
+  'Être ou ne pas être, telle est la question.', 'Essere o non essere, questo è il problema.'];
+const PAL = [['#2b5876', '#4e4376'], ['#ff7e5f', '#feb47b'], ['#134e5e', '#71b280'], ['#373b44', '#4286f4'], ['#c94b4b', '#4b134f'],
+  ['#ee9ca7', '#ffdde1'], ['#3a1c71', '#d76d77'], ['#0f2027', '#2c5364'], ['#f2994a', '#f2c94c'], ['#00b4db', '#0083b0'],
+  ['#1d2b64', '#f8cdda'], ['#11998e', '#38ef7d'], ['#232526', '#414345'], ['#e96443', '#904e95'], ['#16222a', '#3a6073']];
+const CH = { col: 3, row: 2 };
+scene('sA', 0, 5.97, (el) => {
+  const R = mulberry32(11);
+  let cards = '';
+  for (let r = 0; r < 5; r++) for (let c = 0; c < 7; c++) {
+    const x = c * 348, y = r * 278, chosen = (r === CH.row && c === CH.col);
+    const pal = PAL[Math.floor(R() * PAL.length)], kind = Math.floor(R() * 4);
+    let art = `<div style="inset:0;background:linear-gradient(${Math.floor(R() * 180)}deg,${pal[0]},${pal[1]})"></div>`;
+    if (kind === 0) art += `<div style="left:${40 + R() * 200}px;top:${30 + R() * 50}px;width:56px;height:56px;border-radius:50%;background:rgba(255,240,200,.85)"></div>
+      <div style="left:-20px;right:-20px;bottom:0;height:90px;background:rgba(0,0,0,.35);clip-path:polygon(0 100%,0 60%,22% 20%,40% 55%,62% 10%,84% 50%,100% 30%,100% 100%)"></div>`;
+    if (kind === 1) { for (let k = 0; k < 9; k++) art += `<div style="left:${k * 36}px;bottom:0;width:30px;height:${40 + R() * 90}px;background:rgba(0,0,0,${.25 + R() * .3})"></div>`; }
+    if (kind === 2) art += `<div style="left:120px;top:44px;width:80px;height:80px;border-radius:50%;background:rgba(0,0,0,.35)"></div><div style="left:80px;top:120px;width:160px;height:90px;border-radius:80px 80px 0 0;background:rgba(0,0,0,.35)"></div>`;
+    if (kind === 3) art += `<div style="inset:0;background:repeating-linear-gradient(${R() * 180}deg,rgba(255,255,255,.12) 0 14px,transparent 14px 34px)"></div>`;
+    if (chosen) art = `<div style="left:0;top:0;width:1280px;height:720px;transform:scale(.25);transform-origin:0 0">${theatreHTML()}</div>`;
+    const mm = Math.floor(R() * 50) + 3, ss = String(Math.floor(R() * 60)).padStart(2, '0');
+    const wp = R() < .35 ? `<div class="wp" style="width:${20 + R() * 60}%"></div>` : '';
+    cards += `<div class="card${chosen ? ' chosen' : ''}" style="left:${x}px;top:${y}px"><div class="thumb">${art}<div class="dur">${mm}:${ss}</div>${wp}</div>
+      <div class="meta"><div class="av" style="background:linear-gradient(${pal[1]},${pal[0]})"></div><div class="tl"><i style="width:${70 + R() * 28}%"></i><i style="width:${35 + R() * 30}%"></i></div></div></div>`;
+  }
+  el.innerHTML = `
+    <div class="a" id="wallP" style="inset:0;perspective:1500px;perspective-origin:960px 540px">
+      <div class="a" id="wall" style="left:0;top:0;width:2408px;height:1362px;transform-origin:0 0">${cards}</div></div>
+    <div class="a" id="aDim" style="inset:0;background:radial-gradient(ellipse at center,rgba(11,11,12,.86),rgba(11,11,12,.6) 70%,rgba(11,11,12,.4))"></div>
+    <div class="a hl" id="aH1" style="left:0;right:0;top:396px;text-align:center;font-size:128px">${words('You found')}<br>${words('the perfect video.')}</div>
+    <div class="a" id="aRedBar" style="left:819px;top:487px;width:282px;height:106px;background:#e4262c;display:none"></div>
+    ${playerHTML('pA', theatreHTML(), `
+      <div class="cap o" id="aFor" style="font-size:42px"></div>
+      <div class="lagset" style="display:flex;flex-direction:column;align-items:center;gap:7px">
+        <div class="cap o" style="font-size:40px">To be, or not to be, that is the question</div>
+        <div style="position:relative"><div class="cap t" style="font-size:44px;letter-spacing:.3em;padding-right:10px" id="aDots">•••</div>
+          <div class="mono" style="position:absolute;left:100%;top:50%;margin-left:14px;transform:translateY(-50%);background:var(--red);color:#fff;font-weight:700;font-size:30px;padding:4px 14px;border-radius:9px;white-space:nowrap">+0.8s</div></div></div>
+      <div class="brokenset" style="display:flex;flex-direction:column;align-items:center;gap:7px">
+        <div style="display:flex;gap:46px;align-items:center"><div class="cap o jag-r" style="font-size:40px;padding-right:34px">To be, or not</div><div class="cap o jag-l bk2" style="font-size:40px;padding-left:34px">to be, that is the</div></div>
+        <div style="display:flex;gap:46px;align-items:center"><div class="cap t jag-r" style="font-size:44px;padding-right:34px">生存，还是不</div><div class="cap t jag-l bk3" style="font-size:44px;padding-left:34px">毁灭，这是一</div></div></div>
+      <div class="noneset" style="border:2.5px dashed rgba(255,255,255,.45);border-radius:12px;padding:8px 30px;font:600 38px var(--sans);color:rgba(255,255,255,.65)">No subtitles available</div>`)}
+    <div class="a hl" id="aH2" style="left:0;right:0;top:118px;text-align:center;font-size:80px">${words('…but it’s in a language')} ${words('you don’t speak.', 'red')}</div>
+    <div class="stampbox" id="stampbox">
+      <div class="stamp" id="st0">LAGGING</div><div class="stamp" id="st1">FRAGMENTED</div><div class="stamp" id="st2">NO SUBTITLES</div></div>`;
+}, (t) => {
+  const wall = $('wall'), pA = $('pA');
+  // --- the feed ---
+  const showWall = t < 2.02;
+  vis($('wallP'), showWall);
+  if (showWall) {
+    const p1 = E.outCubic(inv(0, 1.45, t)), pz = E.inOutCubic(inv(1.42, 2.0, t));
+    const fx = lerp(1204 - 300, 1204, p1), fy = lerp(646 + 620, 646, p1);
+    const ax = lerp(32, 15, p1) * (1 - pz), az = lerp(-15, -6, p1) * (1 - pz);
+    const s0 = lerp(.8, 1.0, p1), s = Math.exp(lerp(Math.log(s0), Math.log(4), pz));
+    tf(wall, `translate(960px,540px) rotateX(${ax}deg) rotateZ(${az}deg) scale(${s}) translate(${-fx}px,${-fy}px)`);
+    const dim = 1 - .78 * E.outCubic(inv(1.2, 1.55, t));
+    wall.__cards = wall.__cards || [...wall.querySelectorAll('.card')];
+    wall.__cards.forEach(c => {
+      if (c.classList.contains('chosen')) {
+        const th = c.querySelector('.thumb'), hi = E.outBack(inv(1.2, 1.42, t)) * (1 - inv(1.5, 1.8, t));
+        th.style.boxShadow = `0 0 0 ${4 * hi}px #ff0033, 0 0 ${60 * hi}px rgba(255,0,51,${.7 * hi})`;
+        th.style.borderRadius = lerp(12, 4, pz) + 'px';
+        tf(c, `scale(${1 + .07 * Math.sin(Math.PI * inv(1.2, 1.5, t))})`);
+        c.querySelector('.dur').style.opacity = 1 - pz * 3; c.querySelector('.meta').style.opacity = 1 - pz * 3;
+        updateTheatre(c, t);
+      } else op(c, dim);
+    });
+  }
+  op($('aDim'), 1 - E.outCubic(inv(1.05, 1.35, t)));
+  vis($('aH1'), t < 1.5); wordsAnim($('aH1'), t, .12, 1.05, .07, .55, .035);
+  // --- the player ---
+  const showP = t >= 1.98;
+  vis(pA, showP);
+  if (showP) {
+    const pe = E.outExpo(inv(2.0, 2.65, t));
+    let sx = lerp(1, .84, pe), sy = sx, cy = lerp(540, 622, pe);
+    const pc = E.inExpo(inv(5.5, 5.86, t));
+    sx = lerp(sx, 282 / 1280, pc); sy = lerp(sy, 106 / 720, pc); cy = lerp(cy, 540, pc);
+    pA.style.left = '320px'; pA.style.top = '180px';
+    tf(pA, `translateY(${cy - 540}px) scale(${sx},${sy})`);
+    pA.style.borderRadius = lerp(16, 2, pc) + 'px';
+    pA.style.boxShadow = pc > 0 ? 'none' : '';
+    op(pA.querySelector('.whiteout'), E.inQuad(inv(5.5, 5.74, t)));
+    const chrome = inv(2.0, 2.25, t);
+    op(pA.querySelector('.ctl'), chrome); op(pA.querySelector('.pgrad'), chrome);
+    updateTheatre(pA, t); updatePlayerChrome(pA, t, 2);
+    const foot = pA.querySelector('.foot'), g = E.outCubic(inv(5.0, 5.12, t));
+    foot.style.filter = g > 0 ? `grayscale(${g}) brightness(${1 - .4 * g})` : '';
+    op(pA.querySelector('.ccx'), g);
+    // captions per state
+    const For = $('aFor'), lag = pA.querySelector('.lagset'), brk = pA.querySelector('.brokenset'), none = pA.querySelector('.noneset');
+    const st = t < 2.1 ? 'off' : t < 4.0 ? 'for' : t < 4.5 ? 'lag' : t < 5.0 ? 'brk' : t < 5.5 ? 'none' : 'off';
+    For.style.display = st === 'for' ? '' : 'none'; lag.style.display = st === 'lag' ? 'flex' : 'none';
+    brk.style.display = st === 'brk' ? 'flex' : 'none'; none.style.display = st === 'none' ? '' : 'none';
+    if (st === 'for') {
+      const k = Math.min(FOREIGN.length - 1, Math.floor((t - 2.1) / .235)), dt = t - 2.1 - k * .235;
+      For.textContent = FOREIGN[k];
+      const gl = dt < .075 ? 1 - dt / .075 : 0, n = noise(t * 90);
+      tf(For, `translateX(${n * 16 * gl}px) skewX(${noise(t * 70 + 9) * 14 * gl}deg)`);
+      For.style.textShadow = gl ? `${-5 * gl}px 0 rgba(255,0,60,.9), ${5 * gl}px 0 rgba(0,220,255,.9)` : '';
+      For.style.clipPath = gl > .4 ? `inset(${hash(k) * 30}% 0 ${hash(k + 3) * 20}% 0 round 10px)` : '';
+    }
+    if (st === 'lag') { const d = $('aDots'); d.textContent = ['•  ', '•• ', '•••'][Math.floor(t * 12) % 3]; }
+    if (st === 'brk') {
+      const dt = t - 4.5, d = 10 + 30 * E.outCubic(inv(0, .5, dt));
+      brk.querySelectorAll('.bk2,.bk3').forEach((b, i) => tf(b, `translate(${d}px, ${(i ? -1 : 1) * d * .25}px) rotate(${(i ? -1 : 1) * 4}deg)`));
+    }
+    if (st === 'none') tf(none, `translateX(${noise(t * 40) * 3}px)`);
+  }
+  // headline 2
+  vis($('aH2'), t > 2.2 && t < 4.0); wordsAnim($('aH2'), t, 2.32, 3.74, .055, .5, .012);
+  // stamps
+  ['st0', 'st1', 'st2'].forEach((id, i) => {
+    const ts = 4.0 + i * .5, on = t >= ts && t < (i < 2 ? ts + .5 : 5.62);
+    const s = $(id); s.style.display = on ? '' : 'none';
+    if (on) {
+      const p = E.outExpo(inv(ts, ts + .17, t)), out = i === 2 ? E.inQuad(inv(5.48, 5.62, t)) : 0;
+      tf(s, `translate(-50%,-50%) rotate(${-3 + (i - 1) * 1.5}deg) scale(${lerp(2.1, 1, p) * (1 - out * .3)})`);
+      op(s, Math.min(1, (t - ts) / .03) * (1 - out));
+    }
+  });
+  // the red bar that slides out from under the collapsed screen
+  const rb = $('aRedBar'), rbOn = t >= 5.74;
+  rb.style.display = rbOn ? '' : 'none';
+  if (rbOn) tf(rb, `translateY(${106 * E.outExpo(inv(5.74, 5.9, t))}px)`);
+});
+
+/* ---------------------------------------------------------------------
+   B · 5.9–7.9  Logo. The two bars are a text cursor; it types the
+   wordmark, then the tagline lands as a dual subtitle.
+   --------------------------------------------------------------------- */
+const WM = { left: 360, top: 380.55, k: 1200 / 7754 };
+const wx = x => WM.left + (x - 139) * WM.k, wy = y => WM.top + (y - 553) * WM.k;
+let LETTER_T = [];
+scene('sB', 5.95, 7.87, (el) => {
+  let parts = ''; const R = mulberry32(5);
+  for (let i = 0; i < 56; i++) { const L = 30 + R() * 80; parts += `<div class="a" data-a="${(i / 56) * Math.PI * 2 + R() * .1}" data-r="${380 + R() * 820}" style="left:960px;top:500px;width:${L}px;height:${4 + R() * 4}px;margin:-3px 0 0 0;border-radius:3px;background:${['#fff', '#ff0033', '#f7c9c8'][i % 3]};transform-origin:0 50%"></div>`; }
+  el.innerHTML = `
+    <div class="a" id="bGlow" style="left:-240px;top:-500px;width:2400px;height:2000px;background:radial-gradient(closest-side,rgba(255,0,51,.38),rgba(255,0,51,.08) 55%,transparent)"></div>
+    <div class="a" id="bRing1" style="left:960px;top:500px;border:4px solid #ff0033;border-radius:50%"></div>
+    <div class="a" id="bRing2" style="left:960px;top:500px;border:2px solid #fff;border-radius:50%"></div>
+    <div class="a" id="bParts" style="inset:0">${parts}</div>
+    <div class="a" id="bFlare" style="left:-200px;top:470px;width:2320px;height:60px;mix-blend-mode:screen;background:radial-gradient(closest-side,rgba(255,255,255,.95),rgba(255,120,150,.5) 35%,rgba(255,0,51,.18) 60%,transparent);filter:blur(2px)"></div>
+    <div class="a" id="bWM" style="left:${WM.left}px;top:${WM.top}px;color:#f5f5f5">${wordmarkSVG()}</div>
+    <div class="bar" id="curW" style="background:#f5f5f5"></div><div class="bar" id="curR" style="background:#e4262c"></div>
+    <div class="caps" id="bTag" style="top:612px;gap:9px">
+      <div class="cap o" style="font-size:46px">Dual subtitles for every video.</div>
+      <div class="cap t" style="font-size:50px">为每一个视频，加上双语字幕。</div></div>`;
+  el.querySelectorAll('.wb1,.wb2').forEach(r => r.style.display = 'none');
+}, (t) => {
+  // cursor geometry
+  const W0 = { x: 819, y: 434, w: 282, h: 106 }, startX = 340, endX = wx(7532.75);
+  const bw = 359.99 * WM.k, bh = 136.04 * WM.k, by = wy(1241.83);
+  const pm = E.outExpo(inv(6.0, 6.1, t)), pt = E.outCubic(inv(6.08, 6.56, t));
+  const cx = lerp(lerp(W0.x, startX, pm), endX, pt);
+  const cw = lerp(W0.w, bw, pm), ch = lerp(W0.h, bh, pm), cy = lerp(W0.y, by, pm);
+  const trem = t < 6 ? noise(t * 60) * 2.5 * inv(5.92, 6, t) : 0;
+  const blink = (t > 7.02 && t < 7.17) || (t > 7.42 && t < 7.57) ? 0 : 1;
+  const cW = $('curW'), cR = $('curR');
+  [cW, cR].forEach((c, i) => { c.style.left = (cx + trem) + 'px'; c.style.top = (cy + i * ch) + 'px'; c.style.width = cw + 'px'; c.style.height = ch + 'px'; op(c, blink); });
+  // letters pop in as the cursor passes them
+  const paths = $('bWM').__p || ($('bWM').__p = [...$('bWM').querySelectorAll('.wl')]);
+  if (!LETTER_T.length) {
+    LETTER_T = paths.map(p => { const bb = p.getBBox(); const thr = wx(bb.x + bb.width * .55); let tt = 6.08; for (let s = 6.0; s < 6.6; s += .002) { if (lerp(startX, endX, E.outCubic(inv(6.08, 6.56, s))) >= thr) { tt = s; break; } } return tt; });
+  }
+  paths.forEach((p, i) => {
+    const q = inv(LETTER_T[i], LETTER_T[i] + .24, t), e = E.outBack(q);
+    p.style.transform = `translateY(${(1 - e) * 260}px) scale(${lerp(.2, 1, e)})`;
+    p.style.opacity = clamp(q * 4);
+  });
+  // impact dressing
+  const pr = E.outExpo(inv(6.0, 6.9, t));
+  [['bRing1', 1900], ['bRing2', 1500]].forEach(([id, D], i) => { const r = $(id), d = D * E.outExpo(inv(6.0 + i * .05, 6.95, t)); r.style.width = r.style.height = d + 'px'; r.style.marginLeft = r.style.marginTop = (-d / 2) + 'px'; op(r, t < 6 ? 0 : 1 - inv(6.0, 6.85, t)); });
+  const pe = $('bParts').__p || ($('bParts').__p = [...$('bParts').children]);
+  pe.forEach(p => { const a = +p.dataset.a, r = +p.dataset.r * pr; tf(p, `translate(${Math.cos(a) * r}px,${Math.sin(a) * r}px) rotate(${a}rad) scaleX(${1 - pr * .6})`); op(p, t < 6 ? 0 : 1 - inv(6.3, 6.95, t)); });
+  op($('bGlow'), t < 6 ? .2 : .55 + .45 * beat(t, 6, 8));
+  // tagline as a dual subtitle
+  const caps = $('bTag').children;
+  [...caps].forEach((c, i) => { const p = E.outExpo(inv(6.62 + i * .12, 7.1 + i * .12, t)); c.style.clipPath = `inset(0 ${50 * (1 - p)}% 0 ${50 * (1 - p)}% round 10px)`; op(c, p > 0 ? 1 : 0); });
+  // exit push before the wipe
+  const ex = E.inQuad(inv(7.45, 7.86, t));
+  SC.sB.el.style.transformOrigin = '960px 500px'; tf(SC.sB.el, `scale(${1 + ex * .12})`);
+  const fl = t < 6 ? 0 : Math.exp(-(t - 6) * 3.2);
+  op($('bFlare'), fl); tf($('bFlare'), `scaleX(${.6 + .6 * E.outExpo(inv(6, 6.6, t))})`);
+});
+
+/* ---------------------------------------------------------------------
+   C · 7.85–12.25  Product hero. One line, translated into a new language
+   on every beat, picked in the real popup.
+   --------------------------------------------------------------------- */
+const LANGS = [
+  ['中文 (简体)', '生存还是毁灭，这是一个问题'], ['日本語', '生きるべきか、死ぬべきか、それが問題だ'], ['Español', 'Ser o no ser, esa es la cuestión'],
+  ['Français', 'Être ou ne pas être, telle est la question'], ['한국어', '사느냐 죽느냐, 그것이 문제로다'], ['Deutsch', 'Sein oder Nichtsein, das ist hier die Frage'],
+  ['Русский', 'Быть или не быть, вот в чём вопрос']];
+let LANG_W = [];
+scene('sC', 7.85, 12.26, (el) => {
+  el.innerHTML = `
+    <div class="a" style="left:-200px;top:0;width:1600px;height:1200px;background:radial-gradient(closest-side,rgba(255,0,51,.16),transparent)"></div>
+    <div class="a hl" id="cH" style="left:120px;top:96px;font-size:90px">${words('Any video.')} ${words('Your language.', 'red')}</div>
+    <div class="a" id="pCw" style="left:120px;top:252px;width:1101px;height:619px;perspective:2200px">
+      <div class="a" id="pCm" style="left:-89.5px;top:-50.5px;width:1280px;height:720px">
+      ${playerHTML('pC', theatreHTML(), `<div class="cap o" style="font-size:40px" id="cO">To be, or not to be, that is the question</div>
+        <div class="cap t" id="cT" style="font-size:44px;position:relative;overflow:hidden;height:65px;padding:0">${LANGS.map(l => `<span class="a" style="left:0;right:0;top:6px;text-align:center;white-space:nowrap">${l[1]}</span>`).join('')}</div>`, 92)}
+      </div></div>
+    <div class="a" id="popCw" style="left:1300px;top:252px;width:480px;height:540px;perspective:1600px">${popupHTML('popC', '')}</div>
+    <div class="a" id="cnt" style="left:1296px;top:800px;white-space:nowrap"><span class="hl red" id="cntN" style="font-size:150px;font-variant-numeric:tabular-nums">1</span><span class="hl" id="cntP" style="font-size:150px;color:var(--red);display:inline-block;position:absolute">+</span>
+      <div style="font:700 38px var(--sans);color:#f5f5f5;margin:-4px 0 0 6px">languages, one click away</div></div>`;
+  const pop = el.querySelector('#popC'); pop.style.transformOrigin = '0 0';
+  const roll = pop.querySelector('.lang .roll'); roll.style.top = '0'; roll.style.left = '0'; roll.style.right = '0'; roll.innerHTML = LANGS.map(l => `<span class="a" style="left:8px;top:0;white-space:nowrap">${l[0]}</span>`).join('');
+}, (t) => {
+  wordsAnim($('cH'), t, 7.98, 1e9, .07, .55);
+  const sp = spring(t - 7.9, 1.25, .62), ry = lerp(28, 8, sp) - 5 * inv(8.6, 12, t);
+  tf($('pCm'), `translateX(${lerp(-300, 0, sp)}px) rotateY(${ry}deg) scale(.86)`);
+  const sp2 = spring(t - 8.05, 1.4, .6);
+  tf($('popC'), `translateX(${lerp(340, 0, sp2)}px) rotateY(${lerp(-26, -6, sp2) + 3 * inv(8.6, 12, t)}deg) scale(1.5)`);
+  op($('popCw'), clamp((t - 8.05) * 8));
+  const pC = $('pC'); updateTheatre(pC, t); updatePlayerChrome(pC, t, 8, .36);
+  // caption
+  const cO = $('cO'), cT = $('cT');
+  const po = E.outExpo(inv(8.25, 8.6, t)); cO.style.clipPath = `inset(0 ${50 * (1 - po)}% 0 ${50 * (1 - po)}% round 10px)`;
+  const k = Math.max(-1, Math.min(LANGS.length - 1, Math.floor((t - 8.5) / .5))), dt = t - 8.5 - k * .5;
+  const e = E.outExpo(inv(0, .3, dt));
+  if (k < 0) { op(cT, 0); }
+  else {
+    op(cT, 1);
+    const w = k === 0 ? LANG_W[0] * e : lerp(LANG_W[k - 1], LANG_W[k], e);
+    cT.style.width = w + 'px';
+    [...cT.children].forEach((s, i) => {
+      if (i === k) { tf(s, `translateY(${(1 - e) * 46}px)`); op(s, e); }
+      else if (i === k - 1) { tf(s, `translateY(${-e * 46}px)`); op(s, 1 - e); }
+      else op(s, 0);
+    });
+  }
+  // popup select rolls with it
+  const pop = $('popC'), fld = pop.querySelector('.lang');
+  [...fld.querySelector('.roll').children].forEach((s, i) => {
+    const kk = Math.max(0, k);
+    if (i === kk) { tf(s, `translateY(${k <= 0 ? 0 : (1 - e) * 28}px)`); op(s, k <= 0 ? 1 : e); }
+    else if (i === kk - 1) { tf(s, `translateY(${-e * 28}px)`); op(s, 1 - e); }
+    else op(s, 0);
+  });
+  const ring = k >= 0 ? 1 - E.outCubic(inv(0, .45, dt)) : 0;
+  fld.style.boxShadow = `0 0 0 ${2 + 7 * ring}px rgba(223,85,80,${.25 + .5 * ring})`;
+  // counter
+  const n = Math.round(lerp(1, 100, E.outCubic(inv(8.5, 11.35, t))));
+  $('cntN').textContent = n; $('cntP').style.left = ($('cntN').offsetWidth - 4) + 'px'; const pp = E.outBack(inv(11.35, 11.6, t));
+  op($('cntP'), pp > 0 ? 1 : 0); tf($('cntP'), `scale(${pp})`);
+  op($('cnt'), clamp((t - 8.4) * 6)); tf($('cnt'), `translateY(${(1 - E.outExpo(inv(8.4, 8.9, t))) * 40}px)`);
+  // whip out
+  const pw = E.inCubic(inv(12.0, 12.22, t));
+  tf(SC.sC.el, `translateX(${-2400 * pw}px)`);
+  setBlur(SC.sC.el, 'mbxv', pw > 0 && pw < 1 ? 70 * Math.sin(Math.PI * pw) : 0);
+});
+
+/* ---------------------------------------------------------------------
+   D · 12.05–14.0  Zero lag: the translation track lagging behind, then
+   snapping into lock with the original.
+   --------------------------------------------------------------------- */
+const TL_BLOCKS = [[0, 236, 'Welcome back to the channel.', '欢迎回到频道。'], [256, 520, 'Today we’re building', '今天我们要做'],
+  [540, 900, 'a dual-subtitle player', '一个双语字幕播放器'], [920, 1150, 'from scratch.', '从零开始。'], [1170, 1480, 'Let’s dive in.', '我们开始吧。']];
+const TX0 = 170, TW = 1440;
+scene('sD', 12.04, 14.0, (el) => {
+  let wav = ''; for (let i = 0; i < 176; i++) { const hh = 12 + Math.abs(noise(i * .33)) * 66 + Math.abs(noise(i * 1.7 + 4)) * 24; wav += `<div class="wbar" style="left:${TX0 + i * (TW / 176)}px;top:${116 - hh / 2}px;height:${hh}px"></div>`; }
+  let ruler = ''; for (let i = 0; i <= 40; i++) { const x = TX0 + i * TW / 40; ruler += `<div class="a" style="left:${x}px;top:${i % 5 ? 34 : 26}px;width:1px;height:${i % 5 ? 8 : 16}px;background:#555"></div>`; if (i % 5 === 0) ruler += `<div class="a mono" style="left:${x + 6}px;top:18px;font-size:16px;color:#77777d">0:${String(42 + i / 5).padStart(2, '0')}</div>`; }
+  const blocks = TL_BLOCKS.map((b, i) => `<div class="tblk o" style="left:${TX0 + b[0]}px;top:192px;width:${b[1] - b[0]}px">${b[2]}</div>
+      <div class="tblk t" style="left:${TX0 + b[0]}px;top:276px;width:${b[1] - b[0]}px">${b[3]}</div>
+      <div class="a guide" style="left:${TX0 + b[0]}px;top:178px;width:0;height:176px;border-left:2px dashed var(--red)"></div>`).join('');
+  el.innerHTML = `
+    <div class="a hl" id="dH" style="left:120px;top:140px;font-size:150px">${words('Zero lag.')}</div>
+    <div class="a" id="dSub" style="left:126px;top:320px;font:500 36px var(--sans);color:#a3a3a3;white-space:nowrap">${words('The whole track is translated before you press play.')}</div>
+    <div class="a" id="dRead" style="left:1300px;top:140px;width:500px;text-align:right">
+      <div class="mono" style="font-size:22px;color:#8d8d93;letter-spacing:.14em">SYNC OFFSET</div>
+      <div class="mono" id="dVal" style="font-size:110px;font-weight:700;line-height:1.1;white-space:nowrap">+480ms</div>
+      <div class="mono" id="dOk" style="font-size:24px;color:var(--red);letter-spacing:.12em;font-weight:700">✓ LOCKED TO THE FRAME</div></div>
+    <div class="tcard" id="dCard">${ruler}
+      <div class="lab" style="top:102px">Audio</div><div class="lab" style="top:209px">Original</div><div class="lab" style="top:293px">中文</div>
+      ${wav}${blocks}
+      <div class="a" id="dHead" style="top:12px;left:0;width:3px;height:446px;background:var(--red)"><div class="a" style="left:-8px;top:-2px;width:18px;height:14px;background:var(--red);clip-path:polygon(0 0,100% 0,50% 100%)"></div></div>
+      <div class="a mono" id="dLagTag" style="top:372px;font-size:24px;color:var(--red);font-weight:700;white-space:nowrap">← +480 ms late</div>
+    </div>`;
+}, (t) => {
+  const pin = E.outExpo(inv(12.05, 12.36, t));
+  tf(SC.sD.el, `translateX(${2400 * (1 - pin)}px)`);
+  setBlur(SC.sD.el, 'mbxv2', pin > 0 && pin < .98 ? 70 * (1 - pin) : 0);
+  wordsAnim($('dH'), t, 12.12, 1e9, .06, .5); wordsAnim($('dSub'), t, 12.3, 1e9, .02, .45);
+  const card = $('dCard'); card.__o = card.__o || [...card.querySelectorAll('.tblk.o')]; card.__t = card.__t || [...card.querySelectorAll('.tblk.t')];
+  card.__g = card.__g || [...card.querySelectorAll('.guide')]; card.__w = card.__w || [...card.querySelectorAll('.wbar')];
+  const snap = spring(t - 12.68, 2.4, .42), lag = 92 * (1 - snap);
+  const head = TX0 + TW * inv(12.2, 13.98, t);
+  $('dHead').style.left = head + 'px';
+  card.__w.forEach((b, i) => { const x = TX0 + i * (TW / 176); b.style.background = x < head ? '#f5f5f5' : '#3a3a40'; });
+  TL_BLOCKS.forEach((b, i) => {
+    const drop = E.outExpo(inv(12.12 + i * .05, 12.5 + i * .05, t));
+    const o = card.__o[i], tr = card.__t[i];
+    const x0 = TX0 + b[0], x1 = TX0 + b[1];
+    const onO = head >= x0 && head <= x1, onT = head >= x0 + lag && head <= x1 + lag;
+    tf(o, `translateY(${(1 - drop) * -30}px) scale(${onO ? 1.04 : 1})`); op(o, drop);
+    tf(tr, `translate(${lag}px,${(1 - drop) * 30}px) scale(${onT ? 1.04 : 1})`); op(tr, drop * (t < 12.68 ? .6 : 1));
+    o.style.boxShadow = onO ? '0 0 30px rgba(255,255,255,.55)' : 'none';
+    tr.style.boxShadow = onT ? '0 0 30px rgba(247,201,200,.7)' : 'none';
+    tr.style.outline = t < 12.68 ? '2px dashed rgba(255,0,51,.9)' : 'none';
+    op(card.__g[i], t > 12.68 ? 1 - inv(12.72, 13.3, t) : 0);
+  });
+  const lt = $('dLagTag'); lt.style.left = (TX0 + TL_BLOCKS[0][1] + lag + 14) + 'px'; op(lt, t < 12.68 ? inv(12.35, 12.45, t) : 0);
+  const v = t < 12.68 ? Math.round(480 + noise(t * 30) * 24) : Math.round(480 * (1 - E.outExpo(inv(12.68, 12.9, t))));
+  $('dVal').textContent = (v > 0 ? '+' : '') + v + 'ms'; $('dVal').style.color = t < 12.68 ? '#ff4d6d' : '#f5f5f5';
+  op($('dOk'), E.outCubic(inv(12.85, 13.0, t))); op($('dRead'), inv(12.15, 12.3, t));
+  tf(card, `translateY(${(1 - E.outExpo(inv(12.08, 12.5, t))) * 60}px)`);
+});
+
+/* ---------------------------------------------------------------------
+   E · 14.0–16.0  Whole sentences: three auto-caption fragments snap into
+   one sentence, then one translation.
+   --------------------------------------------------------------------- */
+const FRAGS = [['so what we’re trying', '00:42.10', -390, -50, -6], ['to build here is', '00:43.32', 20, 80, 4], ['something you’ll love', '00:44.05', 420, -30, -3]];
+let FRAG_W = [], MERGED_W = 0;
+scene('sE', 14.0, 16.0, (el) => {
+  el.innerHTML = `
+    <div class="a" style="inset:0;background:radial-gradient(ellipse 60% 50% at 50% 55%,rgba(120,60,40,.35),transparent)"></div>
+    <div class="a hl" id="eH" style="left:0;right:0;top:150px;text-align:center;font-size:100px">${words('Whole sentences.')} ${words('Not fragments.', 'red')}</div>
+    ${FRAGS.map((f, i) => `<div class="a frag" style="left:960px;top:530px"><div class="mono fts" style="position:absolute;left:0;bottom:100%;margin-bottom:10px;font-size:18px;color:#8d8d93;white-space:nowrap">${f[1]}</div><div class="cap o fcap" style="font-size:44px;background:#1f1f23;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)">${f[0]}</div></div>`).join('')}
+    <div class="caps" id="eM" style="top:500px;gap:12px">
+      <div class="cap o" style="font-size:44px;background:#1f1f23;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)" id="eMo">So what we’re trying to build here is something you’ll love.</div>
+      <div class="cap t" style="font-size:48px;background:#1f1f23" id="eMt">我们在这里想打造的，是你会爱上的东西。</div></div>
+    <div class="a mono" id="eNote" style="left:0;right:0;top:770px;text-align:center;font-size:30px;color:#9a9aa0;letter-spacing:.02em">3 fragments  →  1 sentence  →  1 accurate translation</div>`;
+}, (t) => {
+  const pin = E.outQuart(inv(14.0, 14.5, t)); tf(SC.sE.el, `scale(${1.07 - .07 * pin})`);
+  wordsAnim($('eH'), t, 14.03, 1e9, .06, .45);
+  const frs = SC.sE.el.__f || (SC.sE.el.__f = [...SC.sE.el.querySelectorAll('.frag')]);
+  const total = FRAG_W.reduce((a, b) => a + b, 0) + 2 * 12;
+  let acc = 960 - total / 2;
+  const m = spring(t - 14.62, 2.6, .55), merged = t >= 14.9;
+  frs.forEach((f, i) => {
+    const F = FRAGS[i], w = FRAG_W[i];
+    const fin = acc + w / 2; acc += w + 12;
+    const appear = E.outBack(inv(14.08 + i * .1, 14.4 + i * .1, t));
+    const fx = lerp(960 + F[2], fin, m), fy = lerp(560 + F[3] + Math.sin(t * 2.4 + i * 2) * 10, 560, m);
+    tf(f, `translate(${fx - w / 2 - 960}px,${fy - 560}px) rotate(${F[4] * (1 - m)}deg) scale(${appear})`);
+    op(f, merged ? 0 : clamp(appear * 2));
+    const z = 1 - m;
+    f.querySelector('.fcap').style.clipPath = z > .02 ? `polygon(0 0,${100 - 3 * z}% 0,100% 20%,${100 - 3 * z}% 40%,100% 60%,${100 - 3 * z}% 80%,100% 100%,0 100%,${3 * z}% 80%,0 60%,${3 * z}% 40%,0 20%)` : 'none';
+    op(f.querySelector('.fts'), 1 - inv(14.6, 14.75, t));
+  });
+  const eM = $('eM'); vis(eM, merged);
+  if (merged) {
+    const fl = 1 - inv(14.9, 15.15, t);
+    $('eMo').style.boxShadow = `inset 0 0 0 1px rgba(255,255,255,.14), 0 0 ${60 * fl}px rgba(255,255,255,${.6 * fl})`;
+    const pt = E.outExpo(inv(15.0, 15.4, t));
+    tf($('eMt'), `translateY(${(1 - pt) * -70}px)`); op($('eMt'), pt);
+  }
+  op($('eNote'), E.outCubic(inv(15.3, 15.55, t))); tf($('eNote'), `translateY(${(1 - E.outExpo(inv(15.3, 15.7, t))) * 20}px)`);
+});
+
+/* ---------------------------------------------------------------------
+   F · 16.0–18.0  Live transcription: no subtitle track, so it listens.
+   --------------------------------------------------------------------- */
+const LIVE_SRC = [[16.3, '今天'], [16.45, '今天我们'], [16.6, '今天我们来'], [16.75, '今天我们来聊聊'], [16.95, '今天我们来聊聊人工只能'], [17.22, '今天我们来聊聊人工智能'], [17.34, '今天我们来聊聊人工智能。']];
+const LIVE_TR = [[16.86, 'Today,'], [17.0, 'Today, let’s'], [17.14, 'Today, let’s talk'], [17.3, 'Today, let’s talk about'], [17.46, 'Today, let’s talk about AI.']];
+let LIVE_SW = [], LIVE_TW = [];
+function vlogHTML() {
+  let bok = ''; const R = mulberry32(3);
+  for (let i = 0; i < 9; i++) bok += `<div class="a" style="left:${R() * 1280}px;top:${R() * 500}px;width:${80 + R() * 160}px;height:${80 + R() * 160}px;border-radius:50%;background:rgba(${['255,180,220', '160,140,255', '255,210,160'][i % 3]},.28);filter:blur(${10 + R() * 14}px)"></div>`;
+  let wv = ''; for (let i = 0; i < 64; i++) wv += `<i class="a" style="left:${640 - 32 * 15 + i * 15}px;width:8px;border-radius:4px;background:${Math.abs(i - 31.5) < 12 ? 'rgba(255,255,255,.85)' : 'rgba(255,150,190,.7)'}"></i>`;
+  return `<div class="a" style="inset:0;background:radial-gradient(ellipse at 70% 30%,#b24a6b,#472a5e 50%,#1b1f3a)">${bok}
+    <div class="a" style="left:470px;top:150px;width:340px;height:600px">
+      <div class="a" style="left:110px;top:40px;width:120px;height:150px;border-radius:60px;background:#140f22"></div>
+      <div class="a" style="left:96px;top:42px;width:148px;height:110px;border-radius:74px 74px 0 0;border:12px solid #0c0916;border-bottom:0"></div>
+      <div class="a" style="left:84px;top:108px;width:30px;height:58px;border-radius:12px;background:#0c0916"></div><div class="a" style="left:226px;top:108px;width:30px;height:58px;border-radius:12px;background:#0c0916"></div>
+      <div class="a" style="left:0;top:200px;width:340px;height:400px;border-radius:170px 170px 0 0;background:#140f22"></div></div>
+    <div class="a" style="left:780px;top:300px;width:46px;height:96px;border-radius:23px;background:linear-gradient(#3a3550,#1a1726);box-shadow:inset 0 0 0 3px #4a4466"></div>
+    <div class="a" style="left:799px;top:396px;width:8px;height:240px;background:#1a1726"></div>
+    <div class="a" id="fWave" style="left:0;right:0;top:392px;height:90px;mix-blend-mode:screen;opacity:.8">${wv}</div></div>
+    <div class="a" style="left:28px;top:26px;display:flex;gap:10px;align-items:center;background:var(--red);padding:8px 16px;border-radius:10px;font:800 22px var(--sans);letter-spacing:.06em"><span id="fDot" style="width:12px;height:12px;border-radius:50%;background:#fff"></span>LIVE TRANSCRIBE</div>`;
+}
+scene('sF', 16.0, 18.0, (el) => {
+  el.innerHTML = `
+    <div class="a" style="right:-300px;top:-100px;width:1600px;height:1300px;background:radial-gradient(closest-side,rgba(150,70,170,.28),transparent)"></div>
+    <div class="a hl" id="fH" style="left:120px;top:262px;font-size:96px">${words('No subtitles?')}<br>${words('It listens.', 'red')}</div>
+    <div class="a" id="fSub" style="left:124px;top:520px;font:500 32px/1.4 var(--sans);color:#a3a3a3">${words('Live transcription runs on')}<br>${words('your own computer.')}</div>
+    <div class="a" id="fChips" style="left:120px;top:660px;display:flex;flex-direction:column;gap:14px;align-items:flex-start">
+      <div class="chip" style="font-size:24px;padding:10px 20px"><span style="color:var(--red)">●</span>&nbsp; Audio never leaves your device</div>
+      <div class="chip" style="font-size:24px;padding:10px 20px"><span style="color:var(--red)">●</span>&nbsp; No per-minute billing</div></div>
+    <div class="a" id="pFw" style="left:872px;top:274px;width:960px;height:540px">
+      <div class="a" style="left:-160px;top:-90px;transform:scale(.75)">${playerHTML('pF', vlogHTML(), `<div class="cap o" id="fS" style="font-size:46px;overflow:hidden;text-align:center"></div><div class="cap t" id="fT" style="font-size:48px;overflow:hidden;text-align:center"></div>`, 92)}</div></div>`;
+}, (t) => {
+  tf(SC.sF.el, `scale(${1.06 - .06 * E.outQuart(inv(16, 16.5, t))})`);
+  wordsAnim($('fH'), t, 16.02, 1e9, .07, .5); wordsAnim($('fSub'), t, 16.3, 1e9, .03, .45);
+  [...$('fChips').children].forEach((c, i) => { const p = E.outExpo(inv(16.55 + i * .12, 16.95 + i * .12, t)); op(c, p); tf(c, `translateX(${(1 - p) * -40}px)`); });
+  const pin = spring(t - 16.05, 1.6, .65); tf($('pFw'), `translateX(${(1 - pin) * 300}px) perspective(1800px) rotateY(${-14 * (1 - pin) - 4}deg)`); op($('pFw'), clamp((t - 16.05) * 8));
+  const pF = $('pF'); updatePlayerChrome(pF, t, 16, .12);
+  op($('fDot'), Math.sin(t * 12) > 0 ? 1 : .25);
+  const wave = $('fWave').__b || ($('fWave').__b = [...$('fWave').children]);
+  wave.forEach((b, i) => { const env = Math.exp(-Math.pow((i - 31.5) / 18, 2)), amp = 6 + 92 * env * Math.abs(noise(t * 9 + i * .45)) * (0.35 + 0.65 * Math.abs(Math.sin(t * 5 + i * .2))); b.style.height = amp + 'px'; b.style.top = (45 - amp / 2) + 'px'; });
+  op($('fWave'), .8 * (t < 17.5 ? 1 : 1 - inv(17.5, 18, t) * .5));
+  const plate = (el, steps, widths, fsz) => {
+    let k = -1; steps.forEach((s, i) => { if (t >= s[0]) k = i; });
+    if (k < 0) { op(el, 0); return; } op(el, 1);
+    const e = E.outExpo(inv(steps[k][0], steps[k][0] + .14, t));
+    el.style.width = (k ? lerp(widths[k - 1], widths[k], e) : widths[0] * e) + 'px';
+    let txt = steps[k][1];
+    if (el.id === 'fS' && txt.includes('人工')) {
+      const fix = steps[k][1].includes('智能'), hl = fix ? 1 - inv(steps[5][0], steps[5][0] + .35, t) : 0;
+      txt = txt.replace(/人工(只能|智能)/, m => `<span style="background:rgba(255,0,51,${.75 * hl});border-radius:4px;${fix ? '' : 'opacity:.6'}">${m}</span>`);
+    }
+    if (el.__last !== txt) { el.innerHTML = txt; el.__last = txt; }
+  };
+  plate($('fS'), LIVE_SRC, LIVE_SW); plate($('fT'), LIVE_TR, LIVE_TW);
+});
+
+/* ---------------------------------------------------------------------
+   G · 18.0–20.0  Everything else, in eight tiles. Zooms through "Free".
+   --------------------------------------------------------------------- */
+const TILE = { w: 420, h: 334, gap: 24, x0: 84, y0: 194 };
+scene('sG', 18.0, 19.96, (el) => {
+  const vis_ = [
+    `<div style="display:flex;flex-direction:column;gap:12px;align-items:flex-start"><span class="chip"><span style="color:#ff3355">●</span> YouTube</span><span class="chip"><span style="color:#38c6f4">●</span> Vimeo</span><span class="chip"><span style="color:#fb7299">●</span> Bilibili</span></div>`,
+    `<div style="display:grid;grid-template-columns:auto auto;gap:12px;justify-content:start"><span class="chip">Claude</span><span class="chip">OpenAI</span><span class="chip">Gemini</span><span class="chip">DeepSeek</span></div>`,
+    `<div class="hl tfree" style="font-size:140px;color:var(--accent);letter-spacing:-.05em;margin-top:-12px">Free</div>`,
+    `<div style="position:relative;width:100px;height:124px;border-radius:12px;background:#f5f5f5;clip-path:polygon(0 0,72% 0,100% 22%,100% 100%,0 100%)"><div class="mono" style="position:absolute;left:12px;bottom:14px;font-weight:700;font-size:24px;color:#111">.srt</div></div><div class="a tdl" style="left:150px;top:44px;font:700 70px var(--sans);color:var(--red)">↓</div>`,
+    `<div style="display:flex;gap:14px"><span class="key">⌘</span><span class="key">⇧</span><span class="key">S</span></div>`,
+    `<div style="position:relative;width:360px;height:160px;border-radius:12px;background:linear-gradient(135deg,#47536b,#8d7f6d);overflow:hidden"><div class="tdrag" style="position:absolute;left:0;right:0;top:62px;text-align:center"><span style="display:inline-block;background:rgba(0,0,0,.72);border-radius:7px;padding:3px 12px;font:600 21px var(--sans)">Drag me anywhere ↕</span></div></div>`,
+    `<div style="display:flex;align-items:center;gap:20px"><span class="tAa" style="font:800 100px var(--sans);letter-spacing:-.03em">Aa</span><div style="display:flex;gap:10px">${['#ffffff', '#f7c9c8', '#ffd84d', '#7fe0ff'].map(c => `<span style="width:30px;height:30px;border-radius:50%;background:${c};box-shadow:0 0 0 2px rgba(255,255,255,.15)"></span>`).join('')}</div></div>`,
+    `<svg viewBox="0 0 24 24" width="124" height="124" style="fill:none;stroke:#f5f5f5;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 018 0v3"/><circle cx="12" cy="15.5" r="1.4" fill="#ff0033" stroke="none"/></svg>`];
+  const titles = [['3 platforms', 'YouTube, Vimeo & Bilibili'], ['AI translation', 'Optional, only when you say so'], ['Free forever', 'Google Translate built in'], ['Export .srt', 'Both languages, or either'],
+    ['One-key toggle', '⌘⇧S  ·  Alt+Shift+S'], ['Drag to reposition', 'Even in fullscreen'], ['Style it your way', 'Size, colour, background'], ['Private by design', 'Open source · audio stays local']];
+  el.innerHTML = `<div class="a" id="gGrid" style="inset:0;transform-origin:0 0">${titles.map((tt, i) => {
+    const c = i % 4, r = Math.floor(i / 4);
+    return `<div class="tile${i === 2 ? ' blush' : ''}" style="left:${TILE.x0 + c * (TILE.w + TILE.gap)}px;top:${TILE.y0 + r * (TILE.h + TILE.gap)}px">${vis_[i]}<div class="tt">${tt[0]}</div><div class="ts">${tt[1]}</div></div>`;
+  }).join('')}</div>`;
+}, (t) => {
+  const tiles = SC.sG.el.__t || (SC.sG.el.__t = [...SC.sG.el.querySelectorAll('.tile')]);
+  const order = [2, 1, 4, 3, 5, 0, 7, 6];
+  tiles.forEach((tl, i) => {
+    const t0 = 18.0 + order[i] * .075, p = E.outBack(inv(t0, t0 + .42, t)), q = inv(t0, t0 + .12, t);
+    tf(tl, `perspective(1200px) translateY(${(1 - p) * 70}px) rotateX(${(1 - p) * 50}deg) scale(${lerp(.7, 1, p)})`); op(tl, q);
+  });
+  // tiny loops inside the tiles
+  const T = SC.sG.el;
+  const dl = T.querySelector('.tdl'); tf(dl, `translateY(${Math.abs(Math.sin(t * 5)) * 18}px)`);
+  T.querySelectorAll('.key').forEach((k, i) => { const ph = ((t * 2.2 - i * .18) % 1 + 1) % 1, d = ph < .12 ? 1 : 0; tf(k, `translateY(${d * 5}px)`); k.style.boxShadow = d ? '0 1px 0 #0a0a0b,0 2px 6px rgba(0,0,0,.5)' : ''; });
+  tf(T.querySelector('.tdrag'), `translateY(${Math.sin(t * 3.4) * 40}px)`);
+  const aa = T.querySelector('.tAa'); aa.style.color = ['#ffffff', '#f7c9c8', '#ffd84d', '#7fe0ff'][Math.floor(t * 4) % 4]; tf(aa, `scale(${1 + .08 * Math.sin(t * 8)})`);
+  // camera: settle, then zoom through the "Free" tile into the next scene
+  const settle = E.outExpo(inv(18.0, 18.9, t)), z = E.inExpo(inv(19.32, 19.96, t));
+  const cx = TILE.x0 + 2 * (TILE.w + TILE.gap) + TILE.w / 2, cy = TILE.y0 + TILE.h / 2;
+  const s = lerp(1.14, 1, settle) * Math.exp(Math.log(6.5) * z);
+  tf($('gGrid'), `translate(${lerp(cx, 960, z)}px,${lerp(cy, 540, z)}px) rotate(${-2.5 * (1 - settle)}deg) scale(${s}) translate(${-cx}px,${-cy}px)`);
+  // Four shutter samples cannot cover the last frames of an exponential zoom, so blur with its speed.
+  $('gGrid').style.filter = z > .02 ? `blur(${(18 * Math.pow(z, 1.3)).toFixed(2)}px)` : '';
+});
+
+/* ---------------------------------------------------------------------
+   H · 19.8–24.0  Three steps: add it, open a video, pick a language.
+   --------------------------------------------------------------------- */
+const CUR = '<svg viewBox="0 0 28 40" width="34" height="48"><path d="M3 2L3 31L10 24.5L14.5 35L19 33L14.6 22.8L24 22.8Z" fill="#111" stroke="#fff" stroke-width="2.2" stroke-linejoin="round"/></svg>';
+scene('sH', 19.8, 24.02, (el) => {
+  el.innerHTML = `
+    <div class="a" id="hBg" style="inset:0;background:radial-gradient(1000px 1000px at 100% 0%,rgba(255,112,112,.5),transparent 70%),radial-gradient(1100px 1100px at 0% 100%,rgba(255,170,140,.5),transparent 70%),linear-gradient(168deg,#fff8f8 0%,#ffecec 46%,#ffdedc 100%)"></div>
+    <div class="a hl" id="hH" style="left:116px;top:236px;font-size:92px;color:var(--rose-ink)">${words('Up and running')}<br>${words('in three steps.', 'acc')}</div>
+    ${['Add to Chrome', 'Open any video', 'Pick your language'].map((s, i) => `<div class="a hstep" style="left:120px;top:${520 + i * 96}px"><div class="stepc"><div class="fillc"></div><span class="num" style="position:relative">${i + 1}</span><div class="ck"></div></div><div class="stepl" style="left:86px;top:6px">${s}</div></div>`).join('')}
+    <div class="win" id="hWin">
+      <div class="win-top"><span class="tl" style="left:18px;background:#ff5f57"></span><span class="tl" style="left:38px;background:#febc2e"></span><span class="tl" style="left:58px;background:#28c840"></span>
+        <div class="win-tab"><span style="width:18px;height:18px;display:inline-block">${iconSVG()}</span><span id="hTabT">HappySubs — Dual subtitles</span></div></div>
+      <div class="win-bar"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 11-2.3-5.6M20 4v5h-5"/></svg>
+        <div class="addr"><svg viewBox="0 0 24 24" style="width:15px;height:15px"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg><span id="hAddr">huanshuowang.com/happysubs</span></div>
+        <div id="hExt" style="width:28px;height:28px;border-radius:7px;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.08);padding:3px">${iconSVG()}</div>
+        <svg viewBox="0 0 24 24"><path d="M10 4h4v3a2 2 0 104 0V4h0v6h-3a2 2 0 100 4h3v6h-6v-3a2 2 0 10-4 0v3H4v-6h3a2 2 0 100-4H4V4z"/></svg>
+        <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#df5550,#ffb199)"></div></div>
+      <div class="win-body">
+        <div class="site" id="hSite"><div class="nav">${wordmarkSVG()}<span style="border:1px solid rgba(255,255,255,.34);border-radius:999px;padding:3px 11px;font-size:12px;color:#a3a3a3">中</span></div>
+          <div style="width:68px;height:68px;margin:36px auto 0;filter:drop-shadow(0 10px 30px rgba(255,0,51,.38))">${iconSVG()}</div>
+          <h1>Dual subtitles for your videos</h1><div class="vp">v2.1.0</div>
+          <p>Currently supports <b style="color:#dcdcdc">YouTube</b>, <b style="color:#dcdcdc">Vimeo</b> and <b style="color:#dcdcdc">Bilibili</b>. The video’s own subtitles plus free Google Translate, with optional Claude / OpenAI / Gemini / DeepSeek.</p>
+          <span class="cta" id="hCta"><span id="hCtaT">Add to Chrome</span><span id="hRip" style="position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px;border-radius:50%;background:rgba(255,255,255,.5);opacity:0"></span></span><span class="cta2">How to use</span></div>
+        <div class="a" id="hVid" style="inset:0;background:#000">
+          <div class="a" style="left:-110px;top:-48px;transform:scale(.828)">${playerHTML('pH', theatreHTML(), `<div class="cap o" id="hO" style="font-size:40px">To be, or not to be, that is the question</div><div class="cap t" id="hT" style="font-size:46px">生存还是毁灭，这是一个问题</div>`, 92)}</div></div>
+      </div>
+      <div class="a" id="hPopW" style="right:24px;top:92px;width:400px;transform-origin:100% 0">${popupHTML('popH', 'English')}</div>
+    </div>
+    <div class="a" id="hCur" style="left:0;top:0">${CUR}</div>
+    <div class="a" id="hConf" style="inset:0"></div>`;
+  const pop = el.querySelector('#popH'); pop.style.transformOrigin = '0 0'; pop.style.transform = 'scale(1.25)';
+  const fld = pop.querySelector('.lang'); fld.style.overflow = 'visible';
+  fld.insertAdjacentHTML('beforeend', `<div class="list" id="hList">${['English', '中文 (简体)', '中文 (繁體)', '日本語', '한국어', 'Español'].map(s => `<div>${s}</div>`).join('')}</div>`);
+  el.querySelector('.acc') && el.querySelectorAll('.acc').forEach(a => a.style.color = 'var(--accent)');
+  let conf = ''; const R = mulberry32(21); for (let i = 0; i < 40; i++) conf += `<div class="a" data-a="${R() * Math.PI * 2}" data-r="${120 + R() * 380}" data-s="${R()}" style="width:${14 + R() * 26}px;height:${5 + R() * 4}px;border-radius:3px;background:${['#df5550', '#ff0033', '#3b2a2e', '#f7c9c8', '#ffb199'][i % 5]}"></div>`;
+  el.querySelector('#hConf').innerHTML = conf;
+}, (t) => {
+  const el = SC.sH.el;
+  // arriving from the zoom: the blush ground is already there
+  op(el, inv(19.8, 19.93, t));
+  tf($('hBg'), `scale(${1 + .04 * Math.sin(t * .8)})`);
+  wordsAnim($('hH'), t, 19.98, 1e9, .06, .5);
+  const win = $('hWin'), ws = spring(t - 19.95, 1.3, .7);
+  tf(win, `translateY(${(1 - ws) * 160}px) rotate(${(1 - ws) * 3}deg)`); op(win, clamp((t - 19.95) * 6));
+  // steps
+  const done = [20.97, 21.5, 23.1];
+  el.__st = el.__st || [...el.querySelectorAll('.hstep')];
+  el.__st.forEach((s, i) => {
+    const a = E.outExpo(inv(20.15 + i * .08, 20.6 + i * .08, t)); op(s, a); tf(s, `translateX(${(1 - a) * -40}px)`);
+    const d = E.outBack(inv(done[i], done[i] + .3, t));
+    tf(s.querySelector('.fillc'), `scale(${d})`); op(s.querySelector('.num'), 1 - clamp(d * 2)); op(s.querySelector('.ck'), clamp(d * 2));
+    s.querySelector('.ck').style.transform = `rotate(45deg) scale(${d})`;
+  });
+  // page states
+  const site = $('hSite'), vid = $('hVid'), pv = E.inOutCubic(inv(21.2, 21.45, t));
+  op(site, 1 - pv); tf(site, `translateX(${-pv * 120}px)`); op(vid, pv); tf(vid, `translateX(${(1 - pv) * 120}px)`);
+  $('hAddr').textContent = t < 21.25 ? 'huanshuowang.com/happysubs' : 'youtube.com/watch?v=to-be-or-not';
+  $('hTabT').textContent = t < 21.25 ? 'HappySubs — Dual subtitles' : 'Hamlet, Act III — the soliloquy';
+  // the CTA press
+  const cta = $('hCta'), press = t > 20.9 && t < 21.0 ? .94 : 1;
+  tf(cta, `scale(${press})`);
+  $('hCtaT').textContent = t < 20.97 ? 'Add to Chrome' : '✓ Added to Chrome';
+  const rp = inv(20.95, 21.4, t); tf($('hRip'), `scale(${rp * 40})`); op($('hRip'), rp > 0 && rp < 1 ? .5 * (1 - rp) : 0);
+  // extension icon arrives in the toolbar
+  const ex = E.outBack(inv(21.05, 21.35, t)); tf($('hExt'), `scale(${ex})`); op($('hExt'), ex > 0 ? 1 : 0);
+  const exPress = t > 21.93 && t < 22.03 ? .88 : 1; if (ex >= 1) tf($('hExt'), `scale(${exPress})`);
+  // video
+  const pH = $('pH'); updateTheatre(pH, t); updatePlayerChrome(pH, t, 21.3, .2);
+  op($('hO'), inv(21.42, 21.55, t));
+  const tt = E.outBack(inv(23.15, 23.45, t)); op($('hT'), tt > 0 ? 1 : 0); tf($('hT'), `scale(${tt})`);
+  // popup
+  const pw = $('hPopW'), po = spring(t - 22.0, 2.2, .6), pc = E.inCubic(inv(23.12, 23.3, t));
+  vis(pw, t > 22.0 && t < 23.3);
+  tf(pw, `translateY(${(1 - po) * -16}px) scale(${lerp(.92, 1, po) * (1 - pc * .08)})`); op(pw, clamp((t - 22.0) * 10) * (1 - pc));
+  const pop = $('popH'), roll = pop.querySelector('.lang .roll');
+  roll.textContent = t < 23.05 ? 'English' : '中文 (简体)';
+  const list = $('hList'), lo = E.outExpo(inv(22.62, 22.78, t)), lc = t > 23.06;
+  vis(list, t > 22.62 && !lc); tf(list, `scaleY(${lo})`); op(list, lo);
+  [...list.children].forEach((d, i) => { const hov = (i === 0 && t < 22.86) || (i === 1 && t >= 22.86); d.style.background = hov ? 'rgba(223,85,80,.16)' : ''; d.style.color = hov ? 'var(--accent)' : ''; d.style.fontWeight = hov ? 700 : 400; });
+  pop.querySelector('.lang').style.boxShadow = t > 22.55 && t < 23.2 ? '0 0 0 3px rgba(223,85,80,.35)' : '';
+  // cursor path (screen space); clicks at 20.95, 21.95, 22.6, 23.05
+  // Targets measured off the layout at each click (render.py stills + getBoundingClientRect):
+  // Add to Chrome, the toolbar icon, the 2nd-language field, the 中文 option.
+  const K = [[20.25, 1640, 1010], [20.85, 1215, 627], [21.0, 1215, 627], [21.5, 1480, 520], [21.88, 1722, 234], [22.05, 1722, 234], [22.5, 1632, 508], [22.65, 1632, 508], [22.98, 1630, 599], [23.25, 1630, 599], [23.9, 1760, 860]];
+  let cxp = K[0][1], cyp = K[0][2];
+  for (let i = 0; i < K.length - 1; i++) { const [a, x0, y0] = K[i], [b, x1, y1] = K[i + 1]; if (t >= a && t <= b) { const e = E.inOutCubic(inv(a, b, t)); cxp = lerp(x0, x1, e); cyp = lerp(y0, y1, e) - Math.sin(Math.PI * e) * Math.min(60, Math.abs(x1 - x0) * .12); } else if (t > b) { cxp = x1; cyp = y1; } }
+  const click = [20.95, 21.95, 22.6, 23.05].some(c => t > c - .04 && t < c + .06);
+  tf($('hCur'), `translate(${cxp - 3}px,${cyp - 2}px) scale(${click ? .86 : 1})`); op($('hCur'), clamp((t - 20.25) * 8) * (1 - inv(23.75, 23.9, t)));
+  // celebration
+  const cf = $('hConf').__c || ($('hConf').__c = [...$('hConf').children]), cp = E.outExpo(inv(23.12, 23.8, t));
+  cf.forEach(c => { const a = +c.dataset.a, r = +c.dataset.r * cp; tf(c, `translate(${1300 + Math.cos(a) * r}px,${520 + Math.sin(a) * r + cp * cp * 120}px) rotate(${a * 3 + cp * 6 * (+c.dataset.s - .5)}rad)`); op(c, t > 23.12 ? 1 - inv(23.5, 23.95, t) : 0); });
+  tf(el, `scale(${1 + .03 * inv(23.2, 24, t)})`);
+});
+
+/* ---------------------------------------------------------------------
+   I · 24.0–26.0  Four beats of everyday life, each in a different pair
+   of languages.
+   --------------------------------------------------------------------- */
+const MONT = [
+  ['Study.', 'EN → 中文', 'The derivative is just a rate of change.', '导数其实就是变化率。'],
+  ['Work.', 'EN → 日本語', 'Here’s what changed this quarter.', '今四半期の変化をご紹介します。'],
+  ['Cook.', 'ES → EN', 'Dora la cebolla a fuego lento.', 'Brown the onion over low heat.'],
+  ['Unwind.', 'JA → 中文', 'また会おうね。約束だよ。', '我们还会再见的，说好了。']];
+function montArt(i) {
+  if (i === 0) return `<div class="a" style="inset:0;background:radial-gradient(ellipse at 40% 40%,#2f5a47,#173328 70%,#0e2119)"></div>
+    <div class="a" style="inset:0;opacity:.25;background:repeating-linear-gradient(12deg,rgba(255,255,255,.05) 0 2px,transparent 2px 9px)"></div>
+    <div class="a" style="left:560px;top:330px;font:400 74px 'Chalkboard SE',var(--sans);color:rgba(255,255,255,.82);white-space:nowrap">f′(x) = lim<sub style="font-size:34px">h→0</sub> <span style="display:inline-block;text-align:center;vertical-align:middle"><span style="display:block;border-bottom:4px solid rgba(255,255,255,.75);padding:0 10px">f(x+h) − f(x)</span><span style="display:block">h</span></span></div>
+    <svg class="a" style="left:1300px;top:120px" width="520" height="360" viewBox="0 0 520 360"><path d="M20 330 Q 200 -40 500 300" fill="none" stroke="rgba(255,255,255,.75)" stroke-width="5" stroke-linecap="round"/><path class="mtan" d="M60 260 L 420 40" stroke="#f7c9c8" stroke-width="5" stroke-linecap="round" stroke-dasharray="460" /></svg>
+    <div class="a" style="left:0;right:0;bottom:0;height:46px;background:linear-gradient(#7a5532,#4e3420)"></div>`;
+  if (i === 1) return `<div class="a" style="inset:0;background:radial-gradient(ellipse at 50% 20%,#273b74,#0d1430 70%)"></div>
+    <div class="a" style="left:820px;top:150px;width:860px;height:500px;border-radius:18px;background:#f4f6fb;box-shadow:0 0 120px rgba(120,160,255,.45)">
+      <div class="a" style="left:48px;top:36px;font:800 40px var(--sans);color:#1b2240">Q3 Roadmap</div>
+      ${[.35, .5, .62, .8, .95].map((v, k) => `<div class="a mbar" data-v="${v}" style="left:${80 + k * 150}px;bottom:50px;width:96px;height:${v * 320}px;border-radius:10px 10px 0 0;background:${k === 4 ? '#ff0033' : '#9aa7cf'};transform-origin:50% 100%"></div>`).join('')}</div>
+    <div class="a" style="left:0;right:0;bottom:0;height:200px">${Array.from({ length: 16 }, (_, k) => `<div class="a" style="left:${k * 124 - 20}px;bottom:${-40 + (k % 2) * 16}px;width:150px;height:170px;border-radius:75px 75px 0 0;background:#060a18"></div>`).join('')}</div>`;
+  if (i === 2) return `<div class="a" style="inset:0;background:radial-gradient(ellipse at 30% 30%,#ffb36b,#d9612e 55%,#7a2a12)"></div>
+    <div class="a" style="left:420px;top:330px;width:1080px;height:520px;border-radius:40px;background:linear-gradient(#c48a52,#9a6431);box-shadow:0 40px 80px rgba(0,0,0,.35)"></div>
+    <div class="a" style="left:640px;top:360px;width:440px;height:440px;border-radius:50%;background:radial-gradient(circle at 45% 40%,#3a3a3e,#151517 70%);box-shadow:0 30px 60px rgba(0,0,0,.5)"></div>
+    <div class="a" style="left:1060px;top:560px;width:420px;height:46px;border-radius:23px;background:#151517"></div>
+    ${[[720, 470], [860, 520], [790, 610], [930, 650], [980, 470]].map(([x, y]) => `<div class="a" style="left:${x}px;top:${y}px;width:70px;height:46px;border-radius:50%;background:#f3d9a8;box-shadow:inset -6px -6px 0 #d8b67c"></div>`).join('')}
+    ${[0, 1, 2].map(k => `<div class="a msteam" data-k="${k}" style="left:${760 + k * 90}px;top:260px;width:80px;height:200px;border-radius:40px;background:rgba(255,255,255,.35);filter:blur(18px)"></div>`).join('')}`;
+  return `<div class="a" style="inset:0;background:linear-gradient(#2b1055 0%,#7a2b7a 38%,#d53369 62%,#ffb88c 100%)"></div>
+    <div class="a" style="left:760px;top:330px;width:400px;height:400px;border-radius:50%;background:linear-gradient(#ffe29f,#ff7e5f);-webkit-mask:repeating-linear-gradient(#000 0 34px,transparent 34px 44px)"></div>
+    <div class="a" style="left:0;right:0;bottom:0;height:380px">${Array.from({ length: 22 }, (_, k) => { const R = mulberry32(k + 40); return `<div class="a" style="left:${k * 90 - 10}px;bottom:0;width:${70 + R() * 40}px;height:${120 + R() * 240}px;background:#1b0b2e"></div>`; }).join('')}</div>
+    ${Array.from({ length: 18 }, (_, k) => `<div class="a mpetal" data-k="${k}" style="width:18px;height:12px;border-radius:12px 0;background:#ffc6d9"></div>`).join('')}`;
+}
+scene('sI', 24.0, 26.0, (el) => {
+  el.innerHTML = MONT.map((m, i) => `<div class="mshot" id="m${i}">${montArt(i)}<div class="mword">${m[0]}</div>
+    <div class="mcaps"><span class="mtag">${m[1]}</span><div class="cap o" style="font-size:44px">${m[2]}</div><div class="cap t" style="font-size:48px">${m[3]}</div></div></div>`).join('') +
+    `<div class="a mono" id="mIdx" style="right:110px;top:110px;font-size:26px;font-weight:700;color:rgba(255,255,255,.85)"></div>`;
+}, (t) => {
+  const k = Math.min(3, Math.floor((t - 24) / .5)), dt = t - 24 - k * .5;
+  MONT.forEach((_, i) => { $('m' + i).style.display = i === k ? '' : 'none'; });
+  const m = $('m' + k), pz = E.outQuart(inv(0, .5, dt));
+  tf(m, `scale(${1.12 - .12 * pz})`);
+  m.style.filter = dt < .07 ? `brightness(${1 + (1 - dt / .07) * .8})` : '';
+  const wd = m.querySelector('.mword'); tf(wd, `translateY(${(1 - E.outExpo(inv(0, .25, dt))) * 80}px)`); op(wd, clamp(dt * 14));
+  const cp = m.querySelector('.mcaps'); tf(cp, `translateY(${(1 - E.outExpo(inv(.03, .3, dt))) * 50}px)`); op(cp, clamp((dt - .03) * 12));
+  $('mIdx').textContent = `0${k + 1} / 04`;
+  if (k === 0) { const tan = m.querySelector('.mtan'); tan.style.strokeDashoffset = 460 * (1 - E.outCubic(inv(24.05, 24.45, t))); }
+  if (k === 1) m.querySelectorAll('.mbar').forEach((b, j) => tf(b, `scaleY(${E.outBack(inv(24.5 + j * .04, 24.8 + j * .04, t))})`));
+  if (k === 2) m.querySelectorAll('.msteam').forEach(s => { const q = ((t * 1.6 + +s.dataset.k * .33) % 1); tf(s, `translateY(${-q * 120}px) scaleX(${1 + q * .6})`); op(s, Math.sin(q * Math.PI)); });
+  if (k === 3) m.querySelectorAll('.mpetal').forEach(p => { const j = +p.dataset.k, x = (hash(j) * 2100 + t * 260) % 2100 - 100, y = (hash(j + 7) * 1100 + t * 180) % 1100 - 40; tf(p, `translate(${x}px,${y}px) rotate(${t * 200 + j * 40}deg)`); });
+  // funnel into the end card
+  const f = E.inExpo(inv(25.78, 26.0, t));
+  tf(SC.sI.el, `scale(${1 - f * .96})`); SC.sI.el.style.borderRadius = (f * 400) + 'px'; op(SC.sI.el, 1 - inv(25.9, 26.0, t));
+});
+
+/* ---------------------------------------------------------------------
+   J · 25.95–30.0  End card.
+   --------------------------------------------------------------------- */
+scene('sJ', 25.95, 30.01, (el) => {
+  let dots = ''; const R = mulberry32(9);
+  for (let i = 0; i < 60; i++) dots += `<div class="a jd" data-x="${R() * 1920}" data-y="${R() * 1080}" data-s="${.3 + R()}" style="width:${R() < .5 ? 14 : 5}px;height:4px;border-radius:2px;background:${R() < .3 ? '#ff0033' : 'rgba(255,255,255,.5)'}"></div>`;
+  let parts = ''; const R2 = mulberry32(17);
+  for (let i = 0; i < 40; i++) parts += `<div class="a" data-a="${(i / 40) * Math.PI * 2}" data-r="${300 + R2() * 600}" style="left:960px;top:250px;width:${30 + R2() * 60}px;height:5px;border-radius:3px;background:${i % 2 ? '#ff0033' : '#fff'};transform-origin:0 50%"></div>`;
+  el.innerHTML = `
+    <div class="a" id="jGlow" style="left:160px;top:-450px;width:1600px;height:1400px;background:radial-gradient(closest-side,rgba(255,0,51,.34),rgba(255,0,51,.06) 60%,transparent)"></div>
+    <div class="a" style="inset:0">${dots}</div>
+    <div class="a" id="jRing" style="left:960px;top:250px;border:3px solid #ff0033;border-radius:50%"></div>
+    <div class="a" id="jParts" style="inset:0">${parts}</div>
+    <div class="a" id="jIcon" style="left:880px;top:170px;width:160px;height:160px;filter:drop-shadow(0 14px 40px rgba(255,0,51,.5))">${iconSVG()}</div>
+    <div class="a" id="jWM" style="left:540px;top:372px;width:840px;color:#f5f5f5">${wordmarkSVG()}</div>
+    <svg class="a" id="jSweep" style="left:540px;top:372px;width:840px;overflow:visible" viewBox="139 553 7754 1156"><defs><linearGradient id="swg" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="1400" y2="500"><stop offset="0" stop-color="#ff0033" stop-opacity="0"/><stop offset=".5" stop-color="#ff2d55" stop-opacity=".9"/><stop offset="1" stop-color="#ff0033" stop-opacity="0"/></linearGradient></defs><g fill="url(#swg)">${WM_PATHS.map(d => `<path d="${d}"/>`).join('')}</g></svg>
+    <div class="caps" id="jTag" style="top:552px;gap:9px"><div class="cap o" style="font-size:42px">Watch anything. Understand everything.</div><div class="cap t" style="font-size:46px">看懂每一个视频。</div></div>
+    <div class="a" id="jCta" style="left:0;right:0;top:744px;text-align:center"><span style="display:inline-flex;align-items:center;gap:14px;background:var(--red);color:#fff;padding:20px 46px;border-radius:999px;font:700 34px var(--sans);box-shadow:0 14px 40px rgba(255,0,51,.45)">Add to Chrome <span style="opacity:.75;font-weight:600">— it’s free</span></span></div>
+    <div class="a mono" id="jUrl" style="left:0;right:0;top:868px;text-align:center;font-size:26px;color:#cfcfd4">huanshuowang.com/happysubs</div>
+    <div class="a" id="jPlat" style="left:0;right:0;top:920px;text-align:center;font:600 20px var(--sans);color:#8d8d93;letter-spacing:.32em">YOUTUBE · VIMEO · BILIBILI</div>`;
+  el.querySelectorAll('#jWM .wl').forEach(p => { p.style.transformBox = 'fill-box'; p.style.transformOrigin = '50% 100%'; });
+}, (t) => {
+  const ic = spring(t - 26.0, 1.9, .42);
+  tf($('jIcon'), `scale(${ic}) rotate(${(1 - ic) * -20}deg)`); op($('jIcon'), t >= 26 ? 1 : 0);
+  const r = $('jRing'), d = 1700 * E.outExpo(inv(26.0, 26.8, t)); r.style.width = r.style.height = d + 'px'; r.style.marginLeft = r.style.marginTop = -d / 2 + 'px'; op(r, t < 26 ? 0 : 1 - inv(26, 26.75, t));
+  const pr = E.outExpo(inv(26.0, 26.8, t)), pe = $('jParts').__p || ($('jParts').__p = [...$('jParts').children]);
+  pe.forEach(p => { const a = +p.dataset.a, rr = +p.dataset.r * pr; tf(p, `translate(${Math.cos(a) * rr}px,${Math.sin(a) * rr}px) rotate(${a}rad) scaleX(${1 - pr * .7})`); op(p, t < 26 ? 0 : 1 - inv(26.2, 26.85, t)); });
+  const paths = $('jWM').__p || ($('jWM').__p = [...$('jWM').querySelectorAll('.wl')]);
+  paths.forEach((p, i) => { const q = E.outBack(inv(26.25 + i * .035, 26.6 + i * .035, t)); p.style.transform = `translateY(${(1 - q) * 300}px)`; p.style.opacity = clamp(q * 3); });
+  const bars = $('jWM').querySelectorAll('.wb1,.wb2'), bq = E.outExpo(inv(26.55, 26.85, t));
+  const blink = (t > 28.55 && t < 28.72) || (t > 29.05 && t < 29.22) ? 0 : 1;
+  bars.forEach((b, i) => { b.style.transformBox = 'fill-box'; b.style.transformOrigin = '0 50%'; b.style.transform = `scaleX(${bq})`; b.style.opacity = blink; });
+  [...$('jTag').children].forEach((c, i) => { const p = E.outExpo(inv(26.75 + i * .12, 27.25 + i * .12, t)); c.style.clipPath = `inset(0 ${50 * (1 - p)}% 0 ${50 * (1 - p)}% round 10px)`; op(c, p > 0 ? 1 : 0); });
+  const cs = spring(t - 27.2, 2, .5); tf($('jCta'), `scale(${cs})`); op($('jCta'), t > 27.2 ? 1 : 0);
+  op($('jUrl'), E.outCubic(inv(27.45, 27.75, t))); tf($('jUrl'), `translateY(${(1 - E.outExpo(inv(27.45, 27.9, t))) * 24}px)`);
+  op($('jPlat'), E.outCubic(inv(27.6, 27.95, t)));
+  $('swg').setAttribute('gradientTransform', `translate(${lerp(-1600, 8000, E.inOutCubic(inv(28.0, 28.75, t)))},0)`);
+  op($('jSweep'), t > 27.95 && t < 28.8 ? 1 : 0);
+  op($('jGlow'), .7 + .3 * beat(t, 26, 28) + .1 * Math.sin(t * 2));
+  SC.sJ.el.querySelectorAll('.jd').forEach(dd => { const s = +dd.dataset.s; tf(dd, `translate(${+dd.dataset.x + Math.sin(t * s + s * 9) * 30}px,${((+dd.dataset.y - (t - 26) * 40 * s) % 1080 + 1080) % 1080}px)`); op(dd, .2 + .5 * s * inv(26.1, 26.8, t)); });
+  tf(SC.sJ.el, `scale(${1.04 - .04 * E.outCubic(inv(26, 30, t))})`);
+});
+
+/* =====================================================================
+   Overlays: wipe, flash, grain, camera
+   ===================================================================== */
+const SC = {}; SCENES.forEach(s => SC[s.id] = s);
+function setBlur(el, fid, px) {
+  const f = $(fid);
+  if (px > .5) { f.setAttribute('stdDeviation', `${px} 0`); el.style.filter = `url(#${fid === 'mbxv' ? 'mbx' : 'mbx2'})`; }
+  else el.style.filter = '';
+}
+const grain = $('grain');
+(function makeGrain() {
+  const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d'), im = x.createImageData(256, 256), R = mulberry32(99);
+  for (let i = 0; i < im.data.length; i += 4) { const v = R() * 255; im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 255; }
+  x.putImageData(im, 0, 0); grain.style.backgroundImage = `url(${c.toDataURL()})`;
+})();
+function render(t) {
+  for (const s of SCENES) {
+    const on = t >= s.a && t < s.b;
+    if (on !== s.on) { s.el.style.display = on ? 'block' : 'none'; s.on = on; }
+    if (on) s.update(t);
+  }
+  // wipe 7.58–8.25
+  const wipe = $('wipe'), won = t > 7.55 && t < 8.3; wipe.style.display = won ? 'block' : 'none';
+  if (won) {
+    const L = tt => lerp(-2900, 2400, E.inOutCubic(inv(7.58, 8.1, tt)));
+    tf($('wipeW'), `translateX(${L(t)}px) skewX(-14deg)`); tf($('wipeR'), `translateX(${L(t - .075)}px) skewX(-14deg)`);
+  }
+  // flash on the two big hits
+  let fl = 0; [[6.0, .9], [26.0, .7], [14.92, .0]].forEach(([a, k]) => { if (t >= a) fl = Math.max(fl, k * (1 - inv(a, a + .16, t))); });
+  op($('flash'), fl);
+  // camera: shake + punch
+  let sx = 0, sy = 0, sr = 0, sc = 1;
+  IMPACTS.forEach(([a, k], i) => {
+    const dt = t - a; if (dt < 0 || dt > .6) return;
+    const amp = k * Math.exp(-dt * 9);
+    sx += amp * noise(dt * 38 + i * 13); sy += amp * noise(dt * 38 + i * 13 + 50); sr += amp * .045 * noise(dt * 30 + i * 7 + 99);
+    sc += (k / 400) * Math.exp(-dt * 10);
+  });
+  tf(cam, `translate(${sx}px,${sy}px) rotate(${sr}deg) scale(${sc})`);
+  // grain jumps every frame; lighter over the blush scene
+  const fr = Math.floor(t * 60);
+  grain.style.backgroundPosition = `${Math.floor(hash(fr) * 256)}px ${Math.floor(hash(fr + 1) * 256)}px`;
+  const blush = t > 19.9 && t < 24 ? 1 : 0;
+  op(grain, blush ? .06 : .11); op($('vig'), blush ? .25 : 1);
+  op($('fade'), Math.max(1 - inv(0, .12, t), E.inQuad(inv(29.5, 30, t))));
+}
+
+/* =====================================================================
+   Boot: measure the plates that animate their width, then go.
+   ===================================================================== */
+function boot() {
+  LANG_W = LANGS.map(l => measure(l[1], 'font-size:44px'));
+  FRAG_W = FRAGS.map(f => measure(f[0], 'font-size:44px'));
+  LIVE_SW = LIVE_SRC.map(s => measure(s[1], 'font-size:46px'));
+  LIVE_TW = LIVE_TR.map(s => measure(s[1], 'font-size:48px'));
+  // the roll plate needs side padding added back
+  LANG_W = LANG_W.map(w => w + 4);
+  window.__seek = (t) => { render(t); return true; };
+  window.__ready = true;
+  if (!document.body.classList.contains('render')) startPreview();
+}
+function fit() {
+  const s = Math.min(innerWidth / 1920, (innerHeight - (document.body.classList.contains('render') ? 0 : 46)) / 1080);
+  $('viewport').style.transform = `scale(${s})`;
+}
+function startPreview() {
+  let playing = false, t0 = 0, tAt = 0; const scrub = $('scrub'), tc = $('tc');
+  const audio = new Audio('soundtrack.wav');
+  const seek = t => { tAt = t; render(t); scrub.value = t; tc.textContent = t.toFixed(2); };
+  $('play').onclick = () => { playing = !playing; $('play').textContent = playing ? 'Pause' : 'Play'; if (playing) { if (tAt >= DUR - .01) tAt = 0; t0 = performance.now() / 1000 - tAt; audio.currentTime = tAt; audio.play().catch(() => { }); } else audio.pause(); };
+  scrub.oninput = () => { seek(+scrub.value); if (playing) { t0 = performance.now() / 1000 - tAt; audio.currentTime = tAt; } };
+  const q = new URLSearchParams(location.search); seek(+(q.get('t') || 0));
+  (function loop() { if (playing) { const t = performance.now() / 1000 - t0; if (t >= DUR) { playing = false; $('play').textContent = 'Play'; seek(DUR - .001); } else seek(t); } requestAnimationFrame(loop); })();
+}
+if (new URLSearchParams(location.search).has('render')) document.body.classList.add('render');
+addEventListener('resize', fit); fit();
+document.fonts.ready.then(boot);
+</script>
+</body>
+</html>
