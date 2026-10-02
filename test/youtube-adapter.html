@@ -1,0 +1,170 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>YDS youtube-adapter harness</title>
+<style>
+  body { font: 14px/1.5 -apple-system, sans-serif; margin: 16px; }
+  pre { background: #f4f4f4; padding: 10px; white-space: pre-wrap; }
+</style>
+
+<h1>Does YouTube's caption parsing keep what the author wrote?</h1>
+<pre id="out">running…</pre>
+
+<script>
+window.chrome = {
+  // Point the page-script injection at nothing: this harness drives the adapter
+  // directly and has no use for the main-world bridge.
+  runtime: { id: "yds-test", getURL: () => "/test/__none.js", lastError: null },
+  i18n: { getUILanguage: () => "en-US" },
+  storage: { sync: { get: (k, cb) => cb({}), set: (o, cb) => cb && cb() },
+             onChanged: { addListener() {} } }
+};
+</script>
+<script src="../i18n.js"></script>
+<script src="../platform.js"></script>
+<script>
+const results = [];
+const check = (n, p, d) => results.push({ n, p: !!p, d });
+
+// The adapter only accepts a track whose v= matches the page it is on.
+history.replaceState({}, "", "/watch?v=TESTVID");
+
+const ingested = [];
+const ctx = {
+  log() {},
+  settings: () => ({ secondLang: "zh-Hans" }),
+  langMatches: (a, b) => a === b,
+  coalesce: (cues) => cues,
+  onTrackList() {},
+  ingest: (payload) => ingested.push(payload)
+};
+const yt = window.YDS_PLATFORMS.create("youtube", ctx);
+yt.start();
+
+// What YouTube actually sends: a line break inside a cue arrives as its own
+// segment whose utf8 is a newline.
+function sendJson3(events) {
+  ingested.length = 0;
+  window.dispatchEvent(new CustomEvent("YDS_TIMEDTEXT", { detail: {
+    url: "https://www.youtube.com/api/timedtext?v=TESTVID&lang=en",
+    text: JSON.stringify({ events })
+  }}));
+  return ingested.length ? ingested[0].cues : [];
+}
+
+function sendSrv3(xml) {
+  ingested.length = 0;
+  window.dispatchEvent(new CustomEvent("YDS_TIMEDTEXT", { detail: {
+    url: "https://www.youtube.com/api/timedtext?v=TESTVID&lang=en&fmt=srv3",
+    text: xml
+  }}));
+  return ingested.length ? ingested[0].cues : [];
+}
+
+(() => {
+  // --- json3, the format YouTube serves today ---
+  let cues = sendJson3([{
+    tStartMs: 1000, dDurationMs: 3000,
+    segs: [{ utf8: "So overall, good for us." }, { utf8: "\n" }, { utf8: "Yeah." }]
+  }]);
+  check("a json3 cue is ingested", cues.length === 1, JSON.stringify(cues.length));
+
+  // dDurationMs is the rolling window, not the speech. Taken at face value the
+  // opening subtitle sat on screen over the next two sentences — measured on a
+  // real video, seven seconds for a one-line sentence. The per-word tOffsetMs
+  // says when the words actually stop.
+  let timed = sendJson3([{
+    tStartMs: 0, dDurationMs: 7186,
+    segs: [{ utf8: "The", tOffsetMs: 0 },
+           { utf8: " Duwende", tOffsetMs: 300 },
+           { utf8: " are proud warriors.", tOffsetMs: 900 },
+           { utf8: "\n", tOffsetMs: 7000 }]
+  }]);
+  check("a cue ends at its last word, not at the rolling window",
+        timed.length === 1 && Math.abs(timed[0].end - 2.1) < 0.01,
+        JSON.stringify(timed.map(c => [c.start, c.end])));
+
+  // A manual track has no per-word offsets and keeps the duration it was given.
+  timed = sendJson3([{ tStartMs: 0, dDurationMs: 4000,
+                       segs: [{ utf8: "An authored line." }] }]);
+  check("…while a track with no word offsets keeps its own duration",
+        timed.length === 1 && Math.abs(timed[0].end - 4) < 0.01,
+        JSON.stringify(timed.map(c => [c.start, c.end])));
+
+  // ">>" is a captioning convention, not words. Left in, it is translated and
+  // then shows up in front of both languages.
+  timed = sendJson3([{ tStartMs: 0, dDurationMs: 2000,
+                       segs: [{ utf8: ">> So Hollywood, huh?", tOffsetMs: 0 }] }]);
+  check("the speaker mark is stripped before anything sees it",
+        timed.length === 1 && timed[0].text === "So Hollywood, huh?",
+        JSON.stringify(timed.map(c => c.text)));
+  check("the author's line break survives parsing",
+        cues[0] && cues[0].text === "So overall, good for us.\nYeah.",
+        JSON.stringify(cues[0] && cues[0].text));
+
+  // The break is the only whitespace worth keeping — YouTube pads segments with
+  // spaces and those still collapse.
+  cues = sendJson3([{
+    tStartMs: 0, dDurationMs: 2000,
+    segs: [{ utf8: "  We've   got   so many  " }, { utf8: "\n" }, { utf8: "  Shinkansens. " }]
+  }]);
+  check("runs of spaces still collapse, and edges are trimmed",
+        cues[0] && cues[0].text === "We've got so many\nShinkansens.",
+        JSON.stringify(cues[0] && cues[0].text));
+
+  // A cue with no break at all must come out exactly as before.
+  cues = sendJson3([{
+    tStartMs: 0, dDurationMs: 2000,
+    segs: [{ utf8: "Nothing " }, { utf8: "special " }, { utf8: "here." }]
+  }]);
+  check("a cue without a break is a single line, as before",
+        cues[0] && cues[0].text === "Nothing special here.",
+        JSON.stringify(cues[0] && cues[0].text));
+
+  // Several breaks: three speakers in one cue.
+  cues = sendJson3([{
+    tStartMs: 0, dDurationMs: 2000,
+    segs: [{ utf8: "Ready?" }, { utf8: "\n" }, { utf8: "Yes." }, { utf8: "\n" }, { utf8: "Let's go." }]
+  }]);
+  check("several breaks all survive",
+        cues[0] && cues[0].text === "Ready?\nYes.\nLet's go.",
+        JSON.stringify(cues[0] && cues[0].text));
+
+  // Blank segments must not leave an empty line behind.
+  cues = sendJson3([{
+    tStartMs: 0, dDurationMs: 2000,
+    segs: [{ utf8: "One." }, { utf8: "\n" }, { utf8: "\n" }, { utf8: "Two." }]
+  }]);
+  check("a doubled break collapses to one",
+        cues[0] && cues[0].text === "One.\nTwo.",
+        JSON.stringify(cues[0] && cues[0].text));
+
+  // --- srv3, the XML fallback ---
+  cues = sendSrv3(
+    `<?xml version="1.0"?><timedtext><body>` +
+    `<p t="1000" d="3000">So overall, good for us.\nYeah.</p></body></timedtext>`);
+  check("srv3 keeps the break too", cues[0] && cues[0].text === "So overall, good for us.\nYeah.",
+        JSON.stringify(cues[0] && cues[0].text));
+
+  // --- the guards that were already there must still hold ---
+  ingested.length = 0;
+  window.dispatchEvent(new CustomEvent("YDS_TIMEDTEXT", { detail: {
+    url: "https://www.youtube.com/api/timedtext?v=TESTVID&lang=en&tlang=zh",
+    text: JSON.stringify({ events: [{ tStartMs: 0, dDurationMs: 1000, segs: [{ utf8: "x" }] }] })
+  }}));
+  check("YouTube's own auto-translated track is still refused", ingested.length === 0,
+        String(ingested.length));
+
+  ingested.length = 0;
+  window.dispatchEvent(new CustomEvent("YDS_TIMEDTEXT", { detail: {
+    url: "https://www.youtube.com/api/timedtext?v=OTHERVID&lang=en",
+    text: JSON.stringify({ events: [{ tStartMs: 0, dDurationMs: 1000, segs: [{ utf8: "x" }] }] })
+  }}));
+  check("a prefetched track for another video is still refused", ingested.length === 0,
+        String(ingested.length));
+
+  const pass = results.filter(r => r.p).length;
+  document.getElementById("out").textContent =
+    results.map(r => `${r.p ? "PASS" : "FAIL"}  ${r.n}${r.d ? "   [" + r.d + "]" : ""}`).join("\n")
+    + `\n\n${pass}/${results.length} passed`;
+})();
+</script>

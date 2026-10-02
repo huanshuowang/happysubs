@@ -1,8 +1,8 @@
 {
   "appName": {
-    "message": "HappySubs 雙語字幕"
+    "message": "HappySubs — 雙語字幕與即時聽譯 For YouTube / Vimeo / Bilibili"
   },
   "appDesc": {
-    "message": "在 YouTube、Vimeo、B站 上同時顯示兩種語言的字幕；沒有字幕的影片還能即時聽譯。"
+    "message": "在 YouTube、Vimeo、B站 上把字幕翻譯成雙語，兩種語言合成一條；沒有字幕的影片可即時聽譯，字幕還能匯出 .srt。"
   }
 }

@@ -80,6 +80,11 @@ window.requestAnimationFrame = (fn)=>setTimeout(()=>fn(performance.now()),16);
   for (let i = 1; i < rects.length; i++) gaps.push(+(rects[i].top - rects[i-1].bottom).toFixed(2));
   const wraps = [...o.querySelectorAll(".yds-wrap")];
   const boxes = wraps.map(w => w.getClientRects().length);
+  // One painted background for both languages: two plates with a strip of video
+  // between them read as two separate subtitles rather than one caption.
+  const shared = o.querySelectorAll(".yds-live-box").length;
+  const painted = [...o.querySelectorAll(".yds-live-box, .yds-wrap, .yds-clip")]
+    .filter(el => getComputedStyle(el).backgroundColor !== "rgba(0, 0, 0, 0)").length;
   const clips = [...o.querySelectorAll(".yds-clip")].filter(c => c.style.display !== "none");
   const between = clips.length > 1
     ? +(clips[1].getBoundingClientRect().top - clips[0].getBoundingClientRect().bottom).toFixed(2)
@@ -94,6 +99,8 @@ window.requestAnimationFrame = (fn)=>setTimeout(()=>fn(performance.now()),16);
   const visibleLines = Math.round(manyLineHeight / (parseFloat(getComputedStyle(clip).lineHeight) || 1));
 
   document.getElementById("measure").textContent =
+    `shared background boxes: ${shared}, elements actually painted: ${painted}` +
+    `   (want 1 and 1 — both languages in one box)\n` +
     `background boxes per language: ${JSON.stringify(boxes)}   (want 1 each — a wrapped\n` +
     `   sentence should read as one block, not one box per line)\n` +
     `text line spacing inside that box: ${JSON.stringify(gaps)}px   (ordinary leading;\n` +

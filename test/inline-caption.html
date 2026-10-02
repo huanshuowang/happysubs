@@ -1,0 +1,284 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>YDS inline-caption harness</title>
+<style>
+  body { font: 14px/1.5 -apple-system, sans-serif; margin: 16px; }
+  pre { background: #f4f4f4; padding: 10px; white-space: pre-wrap; }
+  .stage { position: relative; width: 640px; height: 200px; margin: 10px 0 24px;
+           background: linear-gradient(135deg, #6b5b45, #cbb89b 60%, #8a7c66); }
+  h2 { font-size: 14px; margin: 18px 0 4px; }
+
+  /* Close enough to each player in the ways that matter: the class names the
+     adapter looks for, a font size set on the strip (what the player scales
+     with the window), and a background on the text itself. */
+  .ytp-caption-window-container { position: absolute; inset: 0; }
+  .caption-window { position: absolute; left: 10%; bottom: 8%; width: 80%;
+                    text-align: center; font-size: 24px; font-family: Roboto, sans-serif; }
+  .ytp-caption-segment { background: rgba(8,8,8,0.75); color: #fff; padding: 0 4px; }
+  .caption-visual-line { display: block; }
+
+  .vp-captions { position: absolute; left: 10%; bottom: 8%; width: 80%;
+                 text-align: center; font-size: 22px; font-family: Helvetica, sans-serif; }
+  .vp-captions [class*="captionsLine"] { display: block; }
+  .vpReal { position: absolute; left: 10%; bottom: 8%; width: 80%; text-align: center; }
+  .vpWindow { display: block; }
+  .vp-captions .inner { background: rgba(0,0,0,0.7); color: #fff; padding: 0 4px; }
+</style>
+
+<h1>Does the translation become part of the player's own caption?</h1>
+<pre id="out">running…</pre>
+
+<h2>YouTube</h2>
+<div class="stage" id="ytStage">
+  <div class="ytp-caption-window-container">
+    <div class="caption-window ytp-caption-window-bottom"><span class="captions-text"></span></div>
+  </div>
+</div>
+
+<h2>Vimeo</h2>
+<div class="stage" id="vimeoStage">
+  <div class="vp-video-wrapper">
+    <div class="vp-captions vpReal" style="font-size: 22px; font-family: Helvetica, Arial, sans-serif; color: rgb(255,255,255);">
+      <span class="vpWindow CaptionsRenderer_module_captionsWindow__04afad3c" style="background-color: rgba(0,0,0,0.7);"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+window.chrome = {
+  runtime: { id: "yds-test", getURL: () => "/test/__none.js", lastError: null },
+  i18n: { getUILanguage: () => "zh-CN" },
+  storage: { sync: { get: (k, cb) => cb({}), set: (o, cb) => cb && cb() },
+             onChanged: { addListener() {} } }
+};
+</script>
+<script src="../i18n.js"></script>
+<script src="../platform.js"></script>
+<script>
+const results = [];
+const check = (n, p, d) => results.push({ n, p: !!p, d });
+const injected = (root) => root.querySelectorAll("[data-yds-inline]");
+// The node a line's colour actually lands on — the innermost one.
+const deepest = (el) => { let n = el; while (n.children.length === 1) n = n.children[0]; return n; };
+
+const ctx = {
+  log() {}, settings: () => ({ secondLang: "zh-Hans" }),
+  langMatches: (a, b) => a === b, coalesce: (c) => c,
+  onTrackList() {}, ingest() {}
+};
+
+// Each player differs only in how it marks up a caption. Everything below the
+// redraw function is the same battery, so a pass here means both platforms got
+// the same behaviour rather than two similar-looking implementations.
+const PLAYERS = [
+  {
+    name: "YouTube",
+    adapter: () => window.YDS_PLATFORMS.create("youtube", ctx),
+    host: () => document.querySelector("#ytStage .captions-text"),
+    strip: () => document.querySelector("#ytStage .caption-window"),
+    // rows: [{ text, color? }]
+    draw(rows) {
+      this.host().innerHTML = rows.map(r =>
+        `<span class="caption-visual-line"><span class="ytp-caption-segment">` +
+        (r.color ? `<span style="color:${r.color}">${r.text}</span>` : r.text) +
+        `</span></span>`).join("");
+    }
+  },
+  {
+    // The shape a live Vimeo page reports: .vp-captions carries the font and
+    // size, a nested window span carries the background, and the lines sit
+    // inside that. Every class name is hashed per build, so nothing here can be
+    // matched by name.
+    name: "Vimeo",
+    adapter: () => window.YDS_PLATFORMS.create("vimeo", ctx),
+    host: () => document.querySelector("#vimeoStage .vpWindow"),
+    strip: () => document.querySelector("#vimeoStage .vpReal"),
+    draw(rows) {
+      this.host().innerHTML = rows.map(r =>
+        `<span class="k3Pz9q" style="background: rgb(0,0,0);">` +
+        (r.color ? `<span style="color:${r.color}">${r.text}</span>` : r.text) +
+        `</span>`).join("");
+    }
+  }
+  ,
+  {
+    // The same player with no line elements: the window writes its text
+    // directly. There is nothing finer-grained to clone, so the window itself
+    // is the line — and a copy of it beside it still carries the background
+    // the player put there.
+    name: "Vimeo (window holds the text)",
+    adapter: () => window.YDS_PLATFORMS.create("vimeo", ctx),
+    host: () => document.querySelector("#vimeoStage .vpReal"),
+    strip: () => document.querySelector("#vimeoStage .vpReal"),
+    draw(rows) {
+      // Only ever one "line" in this shape, so several rows are joined the way
+      // the player itself would render them.
+      const win = document.querySelector("#vimeoStage .vpWindow");
+      win.innerHTML = rows.map(r =>
+        r.color ? `<span style="color:${r.color}">${r.text}</span>` : r.text).join(" ");
+    },
+    // The window is the container here, so emptying it is what "the player is
+    // showing nothing" means; deleting it would remove the box the clone needs.
+    wipe() { document.querySelector("#vimeoStage .vpWindow").innerHTML = ""; },
+    // With no per-line elements there is one box, so the per-speaker checks do
+    // not apply — they are covered by the two cases above.
+    singleLine: true
+  }
+];
+
+const WHITE = "rgb(255, 255, 255)", GREEN = "rgb(0, 255, 0)";
+
+for (const P of PLAYERS) {
+  const tag = P.name;
+  const a = P.adapter();
+  const host = P.host();
+  const mark = (n, p, d) => check(`${tag}: ${n}`, p, d);
+
+  mark("the adapter offers an inline renderer",
+       typeof a.renderInline === "function" && typeof a.clearInline === "function", "");
+
+  // --- 1. it goes in, as a sibling of the player's own line ---
+  P.draw([{ text: "Alright, Sam, new challenge." }]);
+  const ok = a.renderInline(["好吧，山姆，新的挑战"]);
+  mark("renderInline reports success", ok === true, String(ok));
+  mark("exactly one line was added", injected(host).length === 1, String(injected(host).length));
+  mark("it is a sibling of the player's line, not a separate layer",
+       injected(host)[0] && injected(host)[0].parentElement === host,
+       injected(host)[0] ? injected(host)[0].parentElement.className : "(none)");
+
+  const orig = [...host.children].find(n => !n.hasAttribute("data-yds-inline"));
+  const mine = injected(host)[0];
+  mark("the translation text is on screen", mine.textContent.trim() === "好吧，山姆，新的挑战",
+       JSON.stringify(mine.textContent.trim()));
+
+  // Under the original, not beside it. A player that draws its caption lines as
+  // inline boxes puts a plain clone on the same line, and the two languages run
+  // into each other.
+  const origBox = orig.getBoundingClientRect(), mineBox = mine.getBoundingClientRect();
+  mark("it sits below the player's line, not next to it",
+       mineBox.top >= origBox.bottom - 1,
+       JSON.stringify({ originalBottom: Math.round(origBox.bottom), oursTop: Math.round(mineBox.top) }));
+  mark("…and hugs its own text rather than filling the caption area",
+       mineBox.width <= origBox.width + 2 || mineBox.width < P.strip().getBoundingClientRect().width,
+       JSON.stringify({ ours: Math.round(mineBox.width), original: Math.round(origBox.width) }));
+
+  // --- 2. the point of cloning: it inherits the player's own type ---
+  const cs = (el) => getComputedStyle(deepest(el));
+  mark("same font size as the player's line", cs(orig).fontSize === cs(mine).fontSize,
+       `${cs(orig).fontSize} vs ${cs(mine).fontSize}`);
+  mark("same font family", cs(orig).fontFamily === cs(mine).fontFamily,
+       `${cs(orig).fontFamily} vs ${cs(mine).fontFamily}`);
+  mark("same background", cs(orig).backgroundColor === cs(mine).backgroundColor,
+       `${cs(orig).backgroundColor} vs ${cs(mine).backgroundColor}`);
+  mark("same class list, so the player's CSS applies equally",
+       mine.className === orig.className, `${mine.className} | ${orig.className}`);
+
+  // The player scaling its captions up — what fullscreen does — must carry the
+  // translation with it, since that was the whole complaint.
+  const strip = P.strip();
+  const was = strip.style.fontSize;
+  strip.style.fontSize = "48px";
+  mark("grows with the player, as fullscreen does",
+       getComputedStyle(deepest(mine)).fontSize === "48px",
+       getComputedStyle(deepest(mine)).fontSize);
+  strip.style.fontSize = was;
+
+  // --- 3. the feedback-loop guard ---
+  mark("nativeLines ignores the line we added",
+       a.nativeLines().length === 1 && a.nativeLines()[0] === "Alright, Sam, new challenge.",
+       JSON.stringify(a.nativeLines()));
+  const box = a.nativeCaptionBox();
+  mark("nativeCaptionBox ignores it too",
+       !!box && box.bottom <= mine.getBoundingClientRect().top + 1,
+       JSON.stringify({ native: Math.round(box && box.bottom),
+                        ours: Math.round(mine.getBoundingClientRect().top) }));
+
+  // --- 4. the player wipes it on every cue ---
+  P.draw([{ text: "Does that help us?" }]);
+  // Whether the redraw takes our line with it depends on where the player
+  // rebuilds: inside the box our line sits in, or only below it. Either is
+  // fine — what must never happen is ending up with two.
+  mark("a player redraw never leaves a stale second line", injected(host).length <= 1,
+       String(injected(host).length));
+  a.renderInline(["这对我们有帮助吗？"]);
+  mark("…and it goes straight back on the next frame", injected(host).length === 1,
+       String(injected(host).length));
+  for (let i = 0; i < 30; i++) a.renderInline(["这对我们有帮助吗？"]);
+  mark("re-asserting 30 times still leaves exactly one line", injected(host).length === 1,
+       String(injected(host).length));
+
+  // --- 5. two speakers, two colours ---
+  // Skipped where the player draws one box for the whole caption: there is no
+  // second line to pair a second translation with.
+  if (!P.singleLine) {
+  P.draw([{ text: "I don't think so." }, { text: "Okay.", color: "#00ff00" }]);
+  a.renderInline(["我不这么认为", "好的"]);
+  const two = injected(host);
+  mark("two spoken lines get two translated lines, not one merged one",
+       two.length === 2, String(two.length));
+  mark("…each with its own sentence",
+       two.length === 2 && two[0].textContent.trim() === "我不这么认为"
+                        && two[1].textContent.trim() === "好的",
+       JSON.stringify([...two].map(n => n.textContent.trim())));
+  mark("the first translation takes the first speaker's colour",
+       two[0] && getComputedStyle(deepest(two[0])).color === WHITE,
+       two[0] && getComputedStyle(deepest(two[0])).color);
+  mark("and the second takes the second speaker's colour",
+       two[1] && getComputedStyle(deepest(two[1])).color === GREEN,
+       two[1] && getComputedStyle(deepest(two[1])).color);
+  mark("two speakers on screen, and nativeLines still reads only theirs",
+       JSON.stringify(a.nativeLines()) === JSON.stringify(["I don't think so.", "Okay."]),
+       JSON.stringify(a.nativeLines()));
+
+  }
+
+  // --- 5b. rolling captions append a new original line after ours ---
+  // Auto-generated captions grow word by word: the player adds a line *after*
+  // the ones it had, and a translation that stays where it was ends up
+  // sandwiched between two lines of original.
+  P.draw([{ text: "creativity" }]);
+  a.renderInline(["创造力"]);
+  const host2 = P.host();
+  const rolled = document.createElement(P.host().lastElementChild.tagName);
+  rolled.textContent = "questions or ideas";
+  host2.appendChild(rolled);                       // the player's new line, after ours
+  mark("a rolling caption can leave our line in the middle",
+       !!host2.querySelector(`[data-yds-inline]`).nextElementSibling, "");
+  a.renderInline(["创造力问题或想法"]);
+  const injectedNodes = [...host2.querySelectorAll("[data-yds-inline]")];
+  const lastNode = host2.lastElementChild;
+  mark("…and the next render puts the translation back at the end",
+       injectedNodes.includes(lastNode),
+       [...host2.children].map(n => (n.textContent || "").trim().slice(0, 14)).join(" | "));
+  rolled.remove();
+
+  // --- 6. a wrapped sentence is not two speakers ---
+  P.draw([{ text: "Alright, Sam," }, { text: "new challenge." }]);
+  a.renderInline(["好吧，山姆，新的挑战"]);
+  mark("a wrapped sentence still gets exactly one translated line",
+       injected(host).length === 1, String(injected(host).length));
+
+  // --- 7. nothing to attach to ---
+  a.clearInline();
+  mark("clearInline removes it", injected(host).length === 0, String(injected(host).length));
+  (P.wipe ? P.wipe() : (host.innerHTML = ""));
+  mark("with the player showing nothing, renderInline declines",
+       a.renderInline(["好吧"]) === false, "");
+  mark("…and leaves nothing behind for the overlay to fight with",
+       injected(host).length === 0, String(injected(host).length));
+
+  // Leave the working state on screen.
+  if (P.singleLine) {
+    P.draw([{ text: "and we want it to be part of the relationship." }]);
+    a.renderInline(["我们希望它成为双方关系的一部分"]);
+  } else {
+    P.draw([{ text: "I don't think so." }, { text: "Okay.", color: "#00ff00" }]);
+    a.renderInline(["我不这么认为", "好的"]);
+  }
+}
+
+const pass = results.filter(r => r.p).length;
+document.getElementById("out").textContent =
+  results.map(r => `${r.p ? "PASS" : "FAIL"}  ${r.n}${r.d ? "   [" + r.d + "]" : ""}`).join("\n")
+  + `\n\n${pass}/${results.length} passed`;
+</script>

@@ -97,6 +97,44 @@
   }).observe(document, { subtree: true, childList: true });
 
   // ---- bridge to YouTube player's caption API ----
+  // YouTube stores the caption choice — including "auto-translate to X" — and
+  // reapplies it to the next video, and the next. We set one of those once, by
+  // asking for a track the video did not have (see the guard below), and from
+  // then on every auto-captioned video arrived pre-translated by YouTube with
+  // our own translation drawn over the top.
+  //
+  // Clear it, once per video: the player keeps the same original track, minus
+  // the translation. Choosing it again from the player's own menu sticks,
+  // because this only runs when the track list is (re)published.
+  const clearedFor = new Set();
+
+  window.addEventListener("YDS_CLEAR_AUTO_TRANSLATE", (e) => {
+    const want = String((e.detail && e.detail.languageCode) || "").toLowerCase();
+    if (!want) return;
+    const player = document.querySelector("#movie_player");
+    if (!player || typeof player.getOption !== "function") return;
+
+    let id = "";
+    try { id = String(player.getVideoData && player.getVideoData().video_id || ""); } catch {}
+    if (clearedFor.has(id)) return;
+
+    let track = null;
+    try { track = player.getOption("captions", "track"); } catch {}
+    if (!track) return;
+    const translating = String(track.translationLanguage
+      && (track.translationLanguage.languageCode || track.translationLanguage) || "").toLowerCase();
+    // Only the one we would be duplicating. A viewer translating into some
+    // other language has made a choice that is nothing to do with us.
+    if (!translating || translating.split("-")[0] !== want.split("-")[0]) return;
+
+    clearedFor.add(id);
+    try {
+      const plain = { ...track };
+      delete plain.translationLanguage;
+      player.setOption("captions", "track", plain);
+    } catch {}
+  });
+
   // Content script dispatches YDS_LOAD_NATIVE_TRACK with { languageCode }.
   // We ask the player to load that track briefly (which triggers YouTube's own
   // fetch, which we intercept above), then restore the user's original CC.
@@ -105,6 +143,20 @@
     if (!langCode) return;
     const player = document.querySelector("#movie_player");
     if (!player || typeof player.setOption !== "function") return;
+
+    // Only ask for a track the video actually has. Asked for one it does not,
+    // YouTube satisfies the request with its OWN auto-translation — the menu
+    // lands on "English (auto-generated) >> Chinese (Simplified)" and stays
+    // there, because the restore below puts back a track that is no longer what
+    // the player considers current. The viewer is then left with YouTube
+    // translating for them, which is the one thing this extension exists to
+    // replace. We can translate it ourselves; we cannot un-latch that menu.
+    try {
+      const list = player.getOption("captions", "tracklist") || [];
+      const has = list.some(t => t && String(t.languageCode || "").toLowerCase()
+                                   === String(langCode).toLowerCase());
+      if (!has) return;
+    } catch {}
 
     let originalTrack = null;
     try { originalTrack = player.getOption("captions", "track"); } catch {}
@@ -132,7 +184,10 @@
     // Restore whatever the user had before.
     try {
       if (!ccWasOff) {
-        player.setOption("captions", "track", originalTrack);
+        // Without translationLanguage spelled out as empty, a translation the
+        // player picked up during the swap survives the restore.
+        player.setOption("captions", "track",
+                         { ...originalTrack, translationLanguage: undefined });
       } else {
         try { player.unloadModule("captions"); } catch {}
       }

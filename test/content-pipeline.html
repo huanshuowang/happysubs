@@ -15,7 +15,7 @@ const STORE = { ydsSettings: { enabled: true, secondLang: "en", bottomOffset: 20
                                color: "#ffffff", background: "rgba(0,0,0,0.6)",
                                translationProvider: "google", apiKeys: {} } };
 window.chrome = {
-  runtime: { getURL: (f) => "/" + f, onMessage: { addListener() {} }, lastError: null },
+  runtime: { id: "yds-test", getURL: (f) => "/" + f, onMessage: { addListener() {} }, lastError: null },
   storage: {
     sync: {
       get: (keys, cb) => setTimeout(() => cb(JSON.parse(JSON.stringify(STORE))), 0),

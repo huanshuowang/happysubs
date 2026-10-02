@@ -18,7 +18,7 @@
 </div>
 
 <script>
-window.chrome = { runtime: { getURL: (f) => "/" + f } };
+window.chrome = { runtime: { id: "yds-test", getURL: (f) => "/" + f } };
 
 // Canned Bilibili API responses, shaped exactly like the live ones (verified
 // against www.bilibili.com: both endpoints answer code 0 with cookies, no wbi

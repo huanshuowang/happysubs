@@ -1,0 +1,54 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Toast & paid-API card — visual check</title>
+<link rel="stylesheet" href="../overlay.css">
+<style>
+  body { margin:0; background:#0f0f0f; font:14px/1.5 -apple-system,sans-serif; color:#aaa; }
+  .wrap { padding:20px; display:grid; gap:16px; }
+  .player { position:relative; width:640px; height:360px; border-radius:10px; overflow:hidden;
+    background:linear-gradient(145deg,#2b2320,#1a1c27 60%,#15151b); }
+  h2 { font:600 13px/1 -apple-system,sans-serif; color:#777; margin:0 0 6px; letter-spacing:.08em; text-transform:uppercase; }
+</style>
+<div class="wrap">
+  <div>
+    <h2>toast states</h2>
+    <div class="player" id="p"></div>
+  </div>
+</div>
+<script>
+const states = [
+  ["busy",  "DeepSeek 准备翻译 · 正在用 Google Translate 翻译… 24/180"],
+  ["busy",  "正在用 DeepSeek 翻译… 96/180"],
+  ["ok",    "翻译完成 · DeepSeek · 180 条"],
+  ["warn",  "没有 DeepSeek 的 API Key —— 在插件弹窗里填一个"],
+  ["error", "DeepSeek 翻译失败 — HTTP 401"],
+];
+const p = document.getElementById("p");
+states.forEach(([kind, text], i) => {
+  const t = document.createElement("div");
+  t.className = `yds-toast yds-toast-${kind} yds-toast-on`;
+  t.textContent = text;
+  t.style.top = (14 + i * 46) + "px";
+  p.appendChild(t);
+});
+// the confirmation card, over everything, as it really appears
+const root = document.createElement("div");
+root.className = "yds-paid-api-confirm";
+root.style.position = "absolute";
+root.style.inset = "0";
+root.innerHTML = `
+  <div class="yds-paid-api-card">
+    <div class="yds-paid-api-title">Use the DeepSeek API for this video?</div>
+    <div class="yds-paid-api-body">This calls your DeepSeek key and may incur costs. If you cancel, this video keeps using free Google Translate.</div>
+    <div class="yds-paid-api-actions">
+      <button type="button" class="yds-paid-api-free">Use free Google</button>
+      <button type="button" class="yds-paid-api-use">Use DeepSeek API</button>
+    </div>
+  </div>`;
+document.querySelector(".wrap").appendChild(
+  Object.assign(document.createElement("div"), { innerHTML: "<h2>paid-API card</h2>" }));
+const host = document.createElement("div");
+host.style.cssText = "position:relative;width:640px;height:300px;border-radius:10px;overflow:hidden;background:linear-gradient(145deg,#2b2320,#1a1c27 60%,#15151b)";
+host.appendChild(root);
+document.querySelector(".wrap").appendChild(host);
+</script>

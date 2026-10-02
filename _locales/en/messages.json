@@ -1,8 +1,8 @@
 {
   "appName": {
-    "message": "HappySubs — Dual Subtitles & Live Captions"
+    "message": "HappySubs — Dual Subtitles & Live Captions for YouTube™, Vimeo & Bilibili"
   },
   "appDesc": {
-    "message": "Two subtitle languages at once on YouTube, Vimeo and Bilibili — plus live transcription for videos that have no captions at all."
+    "message": "Dual subtitles on YouTube, Vimeo and Bilibili. Translate the captions, read both languages as one line, export them as .srt."
   }
 }

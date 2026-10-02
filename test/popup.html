@@ -19,10 +19,10 @@ const UI_LANG = new URLSearchParams(location.search).get("uiLang") || "auto";
 const STORE = { ydsSettings: {
   enabled: true, secondLang: "zh-Hans", uiLang: UI_LANG, translationOnly: false,
   bottomOffset: 22, fontSize: 22, color: "#ffffff", background: "rgba(0,0,0,0.6)",
-  translationProvider: "google", paidApiAskEachVideo: false, apiKeys: {}
+  translationProvider: "google", paidApiMode: "ask", apiKeys: {}, models: {}
 } };
 window.chrome = {
-  runtime: { getURL: (f) => "/" + f, lastError: null },
+  runtime: { id: "yds-test", getURL: (f) => "/" + f, lastError: null },
   i18n: { getUILanguage: () => "en-US" },        // pretend the browser is English
   storage: {
     sync: {
@@ -34,15 +34,35 @@ window.chrome = {
   },
   tabs: {
     query: () => Promise.resolve([{ id: 1, url: "https://www.youtube.com/watch?v=abc" }]),
-    sendMessage: (id, msg, cb) => cb && cb({
+    sendMessage: (id, msg, cb) => {
+      if (msg && msg.type === "YDS_GET_SRT") {
+        window.__downloads.push({ name: `youtube-abc-${msg.kind}.srt`, kind: msg.kind });
+        return cb && cb({ ok: true, cueCount: 12, from: "translated" });
+      }
+      return cb && cb({
       platform: "youtube", videoId: "abc",
+      // The status poll keeps answering while the checks run, so this has to
+      // come from the stub — setting it directly is undone by the next poll.
+      sourceIsAsr: window.__isAsr === true,
+      // What is actually drawing. Defaults to our own box so the existing
+      // checks are unaffected; the case below flips it.
+      drawnInOwnBox: window.__ownBox !== false,
+      drawsSourceLine: window.__drawsSource !== false,
       tracks: [{ languageCode: "en", kind: "asr", name: "English (auto)" }],
       translations: [], settings: STORE.ydsSettings, nativeCaptionText: "",
       translationStatus: { mode: "translated", provider: "google", cueCount: 12 },
       preCuesLoaded: 12, usingNativeTrack: false,
-      live: { active: false, status: "stopped", detail: "" }
-    })
+      live: { active: window.__liveActive === true, status: window.__liveActive ? "listening" : "stopped", detail: "" }
+      });
+    }
   }
+};
+// Any anchor the popup clicks is recorded rather than followed — the point of
+// the check below is that there should not be one.
+window.__downloads = [];
+window.__anchorClicks = [];
+HTMLAnchorElement.prototype.click = function () {
+  if (this.download) window.__anchorClicks.push({ name: this.download, href: this.href });
 };
 </script>
 <script>
@@ -80,8 +100,6 @@ const loadScript = (src) => new Promise((res, rej) => {
   check("init() finished without throwing", !/init|失败|not defined/i.test(status), JSON.stringify(status));
   check("language dropdown got populated", document.getElementById("lang").options.length > 5,
         String(document.getElementById("lang").options.length));
-  check("font size is filled in", document.getElementById("fontSize").value === "22",
-        document.getElementById("fontSize").value);
   check("second language is selected", document.getElementById("lang").value === "zh-Hans",
         document.getElementById("lang").value);
 
@@ -91,6 +109,24 @@ const loadScript = (src) => new Promise((res, rej) => {
   check(`uiLang=${UI_LANG}: Enable label`, label("enable") === expected.enable, JSON.stringify(label("enable")));
   check(`uiLang=${UI_LANG}: translation-only label`, label("translationOnly") === expected.only,
         JSON.stringify(label("translationOnly")));
+
+  // The language we translate INTO on a fresh install. The browser's own, so
+  // its owner can read it — except an English one, where that would mean
+  // translating English into English and a new user would see nothing happen.
+  const langFor = (ui) => {
+    const real = chrome.i18n.getUILanguage;
+    chrome.i18n.getUILanguage = () => ui;
+    try { return ydsDefaultSecondLang(); } finally { chrome.i18n.getUILanguage = real; }
+  };
+  check("an English browser starts on Simplified Chinese, not English",
+        langFor("en-US") === "zh-Hans" && langFor("en-GB") === "zh-Hans",
+        JSON.stringify([langFor("en-US"), langFor("en-GB")]));
+  check("…every other browser keeps its own language",
+        langFor("fr-FR") === "fr" && langFor("ja") === "ja" && langFor("de-DE") === "de",
+        JSON.stringify([langFor("fr-FR"), langFor("ja"), langFor("de-DE")]));
+  check("…and a Chinese one keeps its own script",
+        langFor("zh-CN") === "zh-Hans" && langFor("zh-TW") === "zh-Hant",
+        JSON.stringify([langFor("zh-CN"), langFor("zh-TW")]));
 
   // --- tabs ---
   check("both tabs exist", !!document.getElementById("tabTranslate") && !!document.getElementById("tabLive"), "");
@@ -103,18 +139,379 @@ const loadScript = (src) => new Promise((res, rej) => {
   check("live panel explains itself before you start",
         document.getElementById("liveStatus").textContent.length > 20,
         JSON.stringify(document.getElementById("liveStatus").textContent.slice(0, 40)));
-  check("live tab says which sites it covers",
-        label("liveScope").length > 15, JSON.stringify(label("liveScope").slice(0, 30)));
   document.getElementById("tabTranslate").click();
   await settle(120);
-  check("translate tab says which sites it covers",
-        label("translateScope").length > 15, JSON.stringify(label("translateScope").slice(0, 30)));
+  // Subtitle style belongs under the translator, not above the language picker:
+  // it is a styling choice, and the panel reads top-down from what to translate
+  // to how it looks.
+  // Appearance is behind the gear, not on the main view — that was the point of
+  // moving it: the popup you open mid-video shows only what you change often.
+  // Which KIND of subtitle you get is the product's main choice, so it lives on
+  // the view people open. The fine-tuning stays behind the gear: the popup you
+  // open mid-video should show what you change often, not every dial.
+  check("the subtitle style picker is on the main view",
+        !!document.getElementById("subtitleMode").closest("#mainView")
+        && !!document.getElementById("takeoverCaptions").closest("#mainView"), "");
+  check("…and the appearance dials are not",
+        ["fontSize", "color", "bgAlpha", "bottomOffset", "captionWidth",
+         "unifyStyles", "sourceFontSize", "sourceColor"]
+          .every(id => document.getElementById(id).closest("#settingsView")), "");
+  // Settings are a second view of this same popup, not a separate page.
+  const gear = document.getElementById("openSettings");
+  // --- picking a model within a provider ---
+  check("no model picker while the free translator is selected",
+        document.getElementById("modelRow").style.display === "none", "");
+
+  document.getElementById("provider").value = "claude";
+  document.getElementById("provider").dispatchEvent(new Event("change"));
+  await settle(300);
+  const modelSel = document.getElementById("model");
+  const modelCustom = document.getElementById("modelCustom");
+  const modelOpts = () => [...modelSel.options].map(o => o.value);
+  check("choosing Claude reveals the model picker",
+        document.getElementById("modelRow").style.display !== "none", "");
+  check("…listing Claude's models, defaulting to the first",
+        modelOpts().length >= 4 && modelSel.value === "claude-haiku-4-5",
+        JSON.stringify(modelOpts()));
+  // Every model has to be readable at a glance, not filtered down to the one
+  // already chosen — which is what a datalist on a filled field does.
+  check("the whole list is visible, not filtered by the current value",
+        modelSel.tagName === "SELECT" && !modelSel.hidden &&
+        document.getElementById("modelCustomWrap").hidden,
+        modelSel.tagName);
+  // The date-suffixed form is not a valid model id any more.
+  check("no model id carries a date suffix",
+        modelOpts().every(v => !/-\d{8}$/.test(v)), JSON.stringify(modelOpts()));
+  check("…and the last entry is the way out of the shortlist",
+        modelOpts()[modelOpts().length - 1] === "__custom__", JSON.stringify(modelOpts()));
+  // Model ids retired by their providers: a shortlist entry that 400s is worse
+  // than no shortlist at all, since the viewer has no way to tell why.
+  const RETIRED = ["gpt-4o", "gpt-4o-mini", "gemini-2.0-flash", "gemini-2.5-flash",
+                   "deepseek-chat", "deepseek-reasoner"];
+  const everyModel = [];
+  for (const p of ["claude", "openai", "gemini", "deepseek"]) {
+    document.getElementById("provider").value = p;
+    document.getElementById("provider").dispatchEvent(new Event("change"));
+    await settle(300);                      // the handler stores before it redraws
+    everyModel.push(...[...modelSel.options].map(o => o.value));
+  }
+  check("no shortlist offers a model its provider has retired",
+        !everyModel.some(v => RETIRED.includes(v)), JSON.stringify(everyModel));
+  document.getElementById("provider").value = "claude";
+  document.getElementById("provider").dispatchEvent(new Event("change"));
+  await settle(300);
+
+  modelSel.value = "claude-opus-5-5";
+  modelSel.dispatchEvent(new Event("change"));
+  await settle(300);
+  check("picking a model writes through under its provider",
+        STORE.ydsSettings.models && STORE.ydsSettings.models.claude === "claude-opus-5-5",
+        JSON.stringify(STORE.ydsSettings.models));
+
+  // The sentinel itself is never stored — it only opens the field.
+  modelSel.value = "__custom__";
+  modelSel.dispatchEvent(new Event("change"));
+  await settle(300);
+  check("choosing Custom… swaps in a field and stores nothing yet",
+        modelSel.hidden && !document.getElementById("modelCustomWrap").hidden &&
+        STORE.ydsSettings.models.claude === "claude-opus-5-5",
+        JSON.stringify(STORE.ydsSettings.models));
+
+  // A model the shortlist has never heard of, typed in by hand.
+  modelCustom.value = "  claude-sonnet-4-20250514  ";
+  modelCustom.dispatchEvent(new Event("change"));
+  await settle(300);
+  check("a model typed in by hand is saved, trimmed",
+        STORE.ydsSettings.models.claude === "claude-sonnet-4-20250514",
+        JSON.stringify(STORE.ydsSettings.models));
+
+  // Emptying the field is how you get back to the list, not a way to send the
+  // provider an empty model name.
+  modelCustom.value = "";
+  modelCustom.dispatchEvent(new Event("change"));
+  await settle(300);
+  check("clearing the field comes back to the last one picked from the list",
+        STORE.ydsSettings.models.claude === "claude-opus-5-5" &&
+        modelSel.value === "claude-opus-5-5" && !modelSel.hidden,
+        JSON.stringify(STORE.ydsSettings.models));
+
+  document.getElementById("provider").value = "deepseek";
+  document.getElementById("provider").dispatchEvent(new Event("change"));
+  await settle(300);
+  check("switching provider swaps the list",
+        modelSel.value === "deepseek-flash", JSON.stringify(modelOpts()));
+  check("…and the Claude choice is remembered, not overwritten",
+        STORE.ydsSettings.models.claude === "claude-opus-5-5",
+        JSON.stringify(STORE.ydsSettings.models));
+
+  // A hand-typed model has to survive a round trip through storage: reopening
+  // the popup must show the field holding it, not snap back to the shortlist.
+  STORE.ydsSettings.models = { claude: "claude-sonnet-4-20250514" };
+  document.getElementById("provider").value = "claude";
+  document.getElementById("provider").dispatchEvent(new Event("change"));
+  await settle(300);
+  check("a stored model outside the shortlist reopens in the custom field",
+        modelSel.value === "__custom__" && modelSel.hidden &&
+        modelCustom.value === "claude-sonnet-4-20250514",
+        modelCustom.value);
+
+  // --- the paid-API policy is a choice, not a checkbox ---
+  document.getElementById("provider").value = "claude";
+  document.getElementById("provider").dispatchEvent(new Event("change"));
+  await settle(300);
+  const policy = document.getElementById("paidApiMode");
+  check("the paid-API policy offers three answers, defaulting to ask",
+        policy && policy.tagName === "SELECT" && policy.value === "ask" &&
+        [...policy.options].map(o => o.value).join(",") === "ask,always,manual",
+        policy ? [...policy.options].map(o => o.value).join(",") : "(missing)");
+  policy.value = "always";
+  policy.dispatchEvent(new Event("change"));
+  await settle(300);
+  check("…and the choice writes through",
+        STORE.ydsSettings.paidApiMode === "always", STORE.ydsSettings.paidApiMode);
+
+  // A key pasted and used in the same breath: the save is debounced, so the
+  // button has to flush it before asking the page to translate.
+  window.__approvals = [];
+  const key = document.getElementById("apiKey");
+  if (key.disabled) document.getElementById("editApiKey").click();
+  key.value = "sk-ant-test-key";
+  key.dispatchEvent(new Event("input"));
+  document.getElementById("usePaidApi").click();   // immediately, no waiting
+  await settle(400);
+  check("pressing translate right after pasting a key saves the key first",
+        (STORE.ydsSettings.apiKeys || {}).claude === "sk-ant-test-key",
+        JSON.stringify(STORE.ydsSettings.apiKeys));
+
+  document.getElementById("provider").value = "google";
+  document.getElementById("provider").dispatchEvent(new Event("change"));
+  await settle(300);
+  check("back to the free translator hides the picker again",
+        document.getElementById("modelRow").style.display === "none", "");
+
+  // Provider names carry no tagline any more.
+  check("provider labels are plain names",
+        [...document.getElementById("provider").options]
+          .every(o => !o.textContent.includes("\u00b7")),
+        JSON.stringify([...document.getElementById("provider").options].map(o => o.textContent)));
+
+  // --- exporting the subtitles ---
+  window.__downloads = [];
+  document.getElementById("srtKind").value = "bilingual";
+  document.getElementById("downloadSrt").click();
+  await settle(400);
+  check("the download button saves a file", window.__downloads.length === 1,
+        JSON.stringify(window.__downloads.map(d => d.name)));
+  check("…named after the video and what is in it",
+        /youtube-abc-bilingual\.srt$/.test(window.__downloads[0]?.name || ""),
+        window.__downloads[0]?.name);
+  check("the popup does not try to save it itself — the page does, because a\n" +
+        "        popup's blob URL dies when the popup closes",
+        !window.__anchorClicks.length, String(window.__anchorClicks.length));
+  check("and the status line says how much was saved",
+        /12/.test(document.getElementById("status").textContent),
+        JSON.stringify(document.getElementById("status").textContent));
+
+  document.getElementById("srtKind").value = "translation";
+  document.getElementById("downloadSrt").click();
+  await settle(400);
+  check("the content choice reaches the page",
+        /translation\.srt$/.test(window.__downloads[1]?.name || ""),
+        window.__downloads[1]?.name);
+
+  // A report, not a control: it belongs under the card rather than inside it,
+  // where a rounded panel of its own looked like something to press.
+  check("the status line sits outside the card",
+        !document.getElementById("status").closest("#mainView"), "");
+  check("settings start hidden", document.getElementById("settingsView").hidden === true, "");
+  gear.click();
+  await settle(120);
+  check("the gear opens settings inside the popup",
+        document.getElementById("settingsView").hidden === false
+        && document.getElementById("mainView").hidden === true, "");
+  check("the appearance controls are there",
+        ["bottomOffset", "captionWidth", "fontSize", "color", "bgAlpha", "uiLang"]
+          .every(id => !!document.getElementById(id)), "");
+
+  // Two languages, two sets of settings — the thing the single colour/size
+  // pair could never express.
+  check("the original's own size and colour are only shown when they can differ",
+        document.getElementById("unifyStyles").checked === false
+        && document.getElementById("sourceFontRow").hidden === false
+        && document.getElementById("sourceColorRow").hidden === false, "");
+  document.getElementById("sourceColor").value = "#00ff00";
+  document.getElementById("sourceColor").dispatchEvent(new Event("change"));
+  await settle(200);
+  // Typed, not blurred — which is what happens when the popup is dismissed
+  // straight after typing, and is how a size used to be lost.
+  document.getElementById("sourceFontSize").value = "31";
+  document.getElementById("sourceFontSize").dispatchEvent(new Event("input"));
+  await settle(200);
+  check("…and the original's size is stored as it is typed, not on blur",
+        STORE.ydsSettings.sourceFontSize === 31
+        && STORE.ydsSettings.fontSize !== 31,
+        JSON.stringify([STORE.ydsSettings.sourceFontSize, STORE.ydsSettings.fontSize]));
+  check("…and the original's colour is stored apart from the translation's",
+        STORE.ydsSettings.sourceColor === "#00ff00"
+        && STORE.ydsSettings.color !== "#00ff00",
+        JSON.stringify([STORE.ydsSettings.sourceColor, STORE.ydsSettings.color]));
+  document.getElementById("unifyStyles").checked = true;
+  document.getElementById("unifyStyles").dispatchEvent(new Event("change"));
+  await settle(200);
+  check("…and asking for one set puts the separate rows away",
+        STORE.ydsSettings.unifyStyles === true
+        && document.getElementById("sourceFontRow").hidden === true
+        && document.getElementById("sourceStyleHead").hidden === true, "");
+  document.getElementById("unifyStyles").checked = false;
+  document.getElementById("unifyStyles").dispatchEvent(new Event("change"));
+  await settle(200);
+  check("the gear turned into a way back", gear.textContent === "\u2190", gear.textContent);
+  check("the status line goes away with the main view",
+        document.getElementById("status").hidden === true, "");
+
+  document.getElementById("subtitleMode").value = "floating";
+  document.getElementById("subtitleMode").dispatchEvent(new Event("change"));
+  await settle(200);
+  check("changing a setting writes through", STORE.ydsSettings.subtitleMode === "floating",
+        String(STORE.ydsSettings.subtitleMode));
+  // The sliders style our own box. When the player draws the translation there
+  // is nothing for them to act on, so they come off screen rather than sit
+  // there doing nothing.
+  check("picking the separate layer reveals the appearance controls",
+        document.getElementById("appearanceControls").hidden === false, "");
+  document.getElementById("subtitleMode").value = "inline";
+  document.getElementById("subtitleMode").dispatchEvent(new Event("change"));
+  window.__ownBox = false;                 // as the page would now answer
+  noteVideoInfo({ drawnInOwnBox: false });
+  await settle(200);
+  check("…and going back to the player's own subtitle hides them",
+        document.getElementById("appearanceControls").hidden === true, "");
+  // The picker is on the main view now, so hiding the appearance dials can
+  // never take it with them — which was the point of checking.
+  check("the style picker is never hidden with the appearance dials",
+        !document.getElementById("subtitleMode").closest("#appearanceControls"), "");
+
+  // Drawing both languages ourselves is only a question inside inline mode —
+  // "separate layer" leaves the player's original alone by definition.
+  check("the takeover switch shows in inline mode",
+        document.getElementById("takeoverRow").hidden === false, "");
+  // On by default: injecting into the player's caption leaves the box as wide
+  // as the English, flickers as the player rebuilds it, and ignores every
+  // appearance setting. Drawing it ourselves is the look this is for.
+  check("…and is on by default, so we draw both languages",
+        document.getElementById("takeoverCaptions").checked === true, "");
+  document.getElementById("takeoverCaptions").checked = false;
+  document.getElementById("takeoverCaptions").dispatchEvent(new Event("change"));
+  await settle(200);
+  check("…and writes through", STORE.ydsSettings.takeoverCaptions === false,
+        String(STORE.ydsSettings.takeoverCaptions));
+  document.getElementById("takeoverCaptions").checked = true;
+  document.getElementById("takeoverCaptions").dispatchEvent(new Event("change"));
+  await settle(200);
+  document.getElementById("subtitleMode").value = "floating";
+  document.getElementById("subtitleMode").dispatchEvent(new Event("change"));
+  await settle(200);
+  check("…and goes away in the separate layer",
+        document.getElementById("takeoverRow").hidden === true, "");
+  document.getElementById("subtitleMode").value = "inline";
+  document.getElementById("subtitleMode").dispatchEvent(new Event("change"));
+  await settle(200);
+  window.__ownBox = true;
+  noteVideoInfo({ drawnInOwnBox: true });
+  await settle(120);
+  check("…and with takeover on, the sliders apply again — we draw the box",
+        document.getElementById("appearanceControls").hidden === false, "");
+  document.getElementById("takeoverCaptions").checked = false;
+  document.getElementById("takeoverCaptions").dispatchEvent(new Event("change"));
+  window.__ownBox = false;                 // as the page would now answer
+  noteVideoInfo({ drawnInOwnBox: false });
+  await settle(200);
+  // Back to the default: this video has its own captions, so the translation
+  // is injected into the player's line and there is nothing here to set.
+  check("…off again, the sliders go and say why",
+        document.getElementById("appearanceControls").hidden === true
+        && document.getElementById("appearanceNote").hidden === false, "");
+  // An auto-captioned video is drawn in our box, so they come back.
+  // An auto-captioned video is taken over, so the page draws the box.
+  window.__isAsr = true;
+  window.__ownBox = true;
+  noteVideoInfo({ sourceIsAsr: true, drawnInOwnBox: true });
+  await settle(200);
+  check("on an auto-captioned video the sliders apply",
+        document.getElementById("appearanceControls").hidden === false
+        && document.getElementById("appearanceNote").hidden === true, "");
+  window.__isAsr = false;
+  noteVideoInfo({ sourceIsAsr: false });
+  await settle(200);
+
+  // The page is the only thing that knows whether our box is on screen. On a
+  // video carrying a target-language track but no source cues, nothing can take
+  // the caption over and the translation is injected into the player's — so
+  // these sliders do nothing, whatever the switches say. Showing them anyway
+  // was a panel full of controls that quietly did not work.
+  window.__ownBox = false;
+  noteVideoInfo({ drawnInOwnBox: false });
+  await settle(200);
+  check("the page can say the sliders do not apply here",
+        document.getElementById("appearanceControls").hidden === true
+        && document.getElementById("appearanceNote").hidden === false, "");
+  window.__ownBox = true;
+  noteVideoInfo({ drawnInOwnBox: true });
+  await settle(200);
+  check("…and that they do",
+        document.getElementById("appearanceControls").hidden === false, "");
+
+  // "Translation only" draws one language, so the original's rows are settings
+  // for something that is not on screen — and with one language there is
+  // nothing to unify either. The section must still be there: it was coming up
+  // completely empty, which read as the panel being broken.
+  window.__drawsSource = false;
+  noteVideoInfo({ drawnInOwnBox: true, drawsSourceLine: false });
+  await settle(200);
+  check("translation-only keeps the appearance section",
+        document.getElementById("appearanceControls").hidden === false
+        && document.getElementById("appearanceNote").hidden === true, "");
+  check("…and offers only the translation's own rows",
+        document.getElementById("sourceFontRow").hidden === true
+        && document.getElementById("sourceStyleHead").hidden === true
+        && document.getElementById("unifyStylesRow").hidden === true, "");
+  window.__drawsSource = true;
+  noteVideoInfo({ drawnInOwnBox: true, drawsSourceLine: true });
+  await settle(200);
+  check("…and the original's rows come back when we draw it again",
+        document.getElementById("unifyStylesRow").hidden === false, "");
+
+  // Live transcription always falls back to our own box — the player has no
+  // captions to become part of, which is why a recogniser is being used at all.
+  // So while it runs the sliders do something, and they have to be reachable.
+  window.__liveActive = true;
+  renderLivePanel({ live: { active: true, status: "listening" } });
+  check("with live transcription running they come back, even in inline",
+        document.getElementById("appearanceControls").hidden === false, "");
+  check("…and the style is still set to inline, so this is the live rule firing",
+        document.getElementById("subtitleMode").value === "inline",
+        document.getElementById("subtitleMode").value);
+  window.__liveActive = false;
+  window.__ownBox = false;                 // back to injecting into the player
+  noteVideoInfo({ drawnInOwnBox: false });
+  renderLivePanel({ live: { active: false, status: "stopped" } });
+  check("stopping live hides them again", 
+        document.getElementById("appearanceControls").hidden === true, "");
+  check("…without clobbering the popup's own keys",
+        STORE.ydsSettings.secondLang === "zh-Hans", String(STORE.ydsSettings.secondLang));
+
+  gear.click();
+  await settle(120);
+  check("clicking it again returns to the main view",
+        document.getElementById("mainView").hidden === false
+        && document.getElementById("settingsView").hidden === true, "");
+  check("…and the status line comes back with it",
+        document.getElementById("status").hidden === false, "");
+  check("and it is a gear again", gear.textContent === "\u2699", gear.textContent);
   document.getElementById("tabLive").click();
   await settle(120);
   check("live panel links to the setup guide",
         !!document.getElementById("liveStatus").querySelector("a"), "");
-  check("shared styling stays visible on both tabs",
-        document.getElementById("fontSize").offsetParent !== null, "");
   document.getElementById("tabTranslate").click();
   await settle(150);
   check("clicking back returns to translate", document.getElementById("panelTranslate").hidden === false, "");

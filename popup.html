@@ -4,75 +4,329 @@
   <meta charset="utf-8" />
   <title>HappySubs</title>
   <style>
-    :root { color-scheme: light dark; }
+    /* Frosted glass over a blush ground. The blur needs something behind it to
+       be worth anything, so the background carries two soft colour blobs and the
+       panels float over them; on a flat fill the effect reads as plain grey.
+       Light only on purpose — a dark scheme would fight the ground colour. */
+    :root {
+      color-scheme: light dark;
+      /* SF Pro Display by name for Chrome on macOS, with -apple-system as the
+         reliable route to the same family when the name does not resolve. */
+      --font: "SF Pro Display", -apple-system, BlinkMacSystemFont,
+              "Segoe UI Variable Display", "Segoe UI", "PingFang SC",
+              "Hiragino Sans GB", "Microsoft YaHei", Roboto, sans-serif;
+      --ink: #3b2a2e;
+      --ink-soft: #937b80;
+      --accent: #df5550;
+      --accent-ink: #fff;
+      --glass: rgba(255, 255, 255, 0.58);
+      --glass-strong: rgba(255, 255, 255, 0.82);
+      --hairline: rgba(255, 255, 255, 0.85);
+      --edge: rgba(190, 125, 125, 0.24);
+      --shadow: 0 6px 22px rgba(163, 92, 92, 0.13);
+      /* SF Pro Display is cut for headlines, so its default spacing reads
+         cramped at 13px. A little tracking back gives it room without
+         loosening the Chinese, which sets on its own metrics anyway. */
+      --tracking: 0.02em;
+      --radius: 14px;
+      /* Drawn here rather than left to Chrome: the native select arrow sits
+         hard against the right edge, which reads as off-centre next to the
+         8px of air the text gets on the left. */
+      --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%233b2a2e' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    }
+
+    /* No border-radius here on purpose: the popup window's shape belongs to
+       Chrome, not to the page. Measured — a radius on the body leaves the
+       window's own square corners untouched. */
     body {
       width: 320px;
       margin: 0;
       padding: 14px 14px 16px;
-      font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font: 13px/1.5 var(--font);
+      letter-spacing: var(--tracking);
+      color: var(--ink);
+      /* The two soft blooms the glass panels blur are painted as background
+         layers, not as positioned elements. An absolutely positioned blob hung
+         off the edges enlarges the document, and a popup is sized to its
+         document — which showed up as a band of dead space below and to the
+         right of the panel. A radial gradient with a transparent stop is
+         already a soft-edged blob, so nothing is lost. */
+      background:
+        radial-gradient(190px 190px at calc(100% + 24px) -28px,
+                        rgba(255, 112, 112, 0.6), transparent 70%),
+        radial-gradient(230px 230px at -46px calc(100% + 46px),
+                        rgba(255, 170, 140, 0.55), transparent 70%),
+        linear-gradient(168deg, #fff8f8 0%, #ffecec 46%, #ffdedc 100%);
+      background-attachment: local, local, local;
     }
-    h1 { font-size: 14px; margin: 0 0 10px; }
-    .tabs { display: flex; gap: 4px; margin: 10px 0 12px; border-bottom: 1px solid rgba(128,128,128,0.3); }
-    .tabs button {
-      flex: 1 1 0; padding: 7px 6px; font: inherit; cursor: pointer;
-      background: transparent; border: 0; border-bottom: 2px solid transparent;
-      color: inherit; opacity: 0.6;
+    .glass {
+      background: var(--glass);
+      -webkit-backdrop-filter: blur(18px) saturate(1.7);
+      backdrop-filter: blur(18px) saturate(1.7);
+      border: 1px solid var(--hairline);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
     }
-    .tabs button[aria-selected="true"] { opacity: 1; font-weight: 600; border-bottom-color: currentColor; }
-    .panel[hidden] { display: none; }
-    .liveStatus { font-size: 12px; opacity: 0.75; margin: 8px 0; line-height: 1.5; }
-    .scopeNote { font-size: 12px; opacity: 0.62; line-height: 1.5; margin: 0 0 8px; }
-    .liveStatus a { color: inherit; }
-    #liveToggle { width: 100%; padding: 9px; font: inherit; cursor: pointer; }
-    .row { display: flex; align-items: center; justify-content: space-between; margin: 8px 0; gap: 8px; }
-    .row label { flex: 0 0 auto; }
-    .row select, .row input[type="color"], .row input[type="number"], .row input[type="password"], .row input[type="text"] {
-      flex: 1 1 auto;
-      min-width: 0;
-      padding: 4px 6px;
-      border-radius: 4px;
-      border: 1px solid rgba(127,127,127,0.4);
+    #mainView, #settingsView {
+      background: var(--glass);
+      -webkit-backdrop-filter: blur(18px) saturate(1.7);
+      backdrop-filter: blur(18px) saturate(1.7);
+      border: 1px solid var(--hairline);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 10px 12px 12px;
+    }
+    [hidden] { display: none !important; }
+
+    /* ---- title bar ---- */
+    .titleBar { display: flex; align-items: center; justify-content: space-between;
+                gap: 8px; margin: 0 2px 10px; }
+    .titleBar h1 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: .015em; }
+    /* The wordmark is 6.72:1, so height alone fixes its size. It draws in
+       currentColor, which is how it follows the light and dark schemes. */
+    .wordmark { display: flex; }
+    .wordmark svg { height: 19px; width: auto; display: block; color: var(--ink); }
+    /* Just the glyph. A white disc up here competed with the card below it and
+       read as a third surface rather than a control. */
+    .gear {
+      flex: 0 0 auto; width: 34px; height: 34px; padding: 0;
+      border: 0; border-radius: 50%;
       background: transparent;
-      color: inherit;
+      color: var(--ink); font-size: 20px; line-height: 1; cursor: pointer;
+      transition: color .12s, background .12s, transform .12s;
     }
-    .apiKeyWrap { display: flex; align-items: center; gap: 6px; flex: 1 1 auto; min-width: 0; }
-    .apiKeyWrap input { width: 100%; }
-    .apiKeyWrap input:disabled { opacity: 0.72; background: rgba(127,127,127,0.12); cursor: pointer; }
+    .gear:hover { background: rgba(255, 255, 255, 0.55); transform: rotate(12deg); }
+    .gear:active { transform: scale(0.94); }
+
+    .resetBtn {
+      border: 1px solid var(--line, rgba(0,0,0,.14));
+      background: transparent; color: var(--ink-soft);
+      font-size: 12px; padding: 5px 11px; border-radius: 8px; cursor: pointer;
+    }
+    .resetBtn:hover { background: rgba(255,255,255,.6); color: var(--ink); }
+
+    /* ---- tabs ---- */
+    /* Everything else in this popup is a white rounded box — the fields, the
+       status line. A white pill for the selected tab read as one more of them.
+       Filling it with the accent makes it the most saturated thing on screen,
+       which is what a "you are here" needs to be. */
+    /* A tinted pill rather than a solid one: solid accent competed with the
+       button below, which is the actual action. The tint still separates the
+       tabs from the white fields around them. */
+    .tabs {
+      display: flex; gap: 4px; margin: 10px 0 12px; padding: 4px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.45);
+      border: 1px solid var(--hairline);
+    }
+    .tabs button {
+      flex: 1 1 0; padding: 7px 6px; font: inherit; letter-spacing: inherit;
+      font-weight: 600; cursor: pointer;
+      background: transparent; border: 0; border-radius: 9px;
+      color: var(--ink-soft);
+      transition: background .14s, color .14s, box-shadow .14s;
+    }
+    .tabs button:hover:not([aria-selected="true"]) {
+      background: rgba(255, 255, 255, 0.7); color: var(--ink);
+    }
+    .tabs button[aria-selected="true"] {
+      color: var(--accent);
+      background: rgba(223, 85, 80, 0.16);
+      font-weight: 700;
+    }
+    /* The browser's own focus ring is blue, which is the one colour nothing
+       else here uses. */
+    .tabs button:focus-visible, .gear:focus-visible, button:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+      outline-offset: 2px;
+    }
+
+    /* ---- rows and fields ---- */
+    .row { display: flex; align-items: center; justify-content: space-between; margin: 9px 0; gap: 8px; }
+    .row label { flex: 0 0 auto; }
+    .row select,
+    .row input[type="color"],
+    .row input[type="number"],
+    .row input[type="password"],
+    .row input[type="text"] {
+      flex: 1 1 auto; min-width: 0;
+      padding: 5px 8px;
+      font: inherit;
+      letter-spacing: inherit;
+      border-radius: 9px;
+      border: 1px solid var(--edge);
+      background: var(--glass-strong);
+      color: var(--ink);
+    }
+    /* Same 8px on the right as the text gets on the left, so the chevron sits
+       symmetrically inside the field. */
+    .row select {
+      appearance: none; -webkit-appearance: none;
+      padding-right: 26px;
+      background-image: var(--chevron);
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+      background-size: 10px 6px;
+    }
+    .row select:focus-visible,
+    .row input:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+      outline-offset: 1px;
+    }
+    input[type="range"] { accent-color: var(--accent); flex: 1 1 auto; min-width: 0; }
+    input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; }
+    input[type="color"] { padding: 2px; height: 26px; }
+    .switch { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
+
+    .apiKeyWrap, .fieldWrap { display: flex; align-items: center; gap: 6px; flex: 1 1 auto; min-width: 0; }
+    .apiKeyWrap input, .fieldWrap input { width: 100%; }
+    .apiKeyWrap input:disabled { opacity: .72; background: rgba(255, 255, 255, 0.5); cursor: pointer; }
     .keyState { flex: 0 0 auto; min-width: 20px; text-align: center; font-size: 14px; }
-    .keyState.ok { color: #24a148; }
+    .keyState.ok { color: #1f9d55; }
     .keyState.missing { color: #d97706; }
     .keyEdit {
+      flex: 0 0 auto; padding: 4px 9px; font: inherit; font-size: 12px;
+      border-radius: 8px; border: 1px solid var(--edge);
+      background: var(--glass-strong); color: var(--ink); cursor: pointer;
+    }
+    .keyEdit:hover { background: #fff; }
+
+    /* The export row is a select and a button side by side, so they have to
+       share metrics — .keyEdit is sized for the smaller API-key row and came
+       out visibly shorter next to a full-height select. */
+    /* A select and a button do not agree on intrinsic height — measured at
+       30px against 32px — so the row states one and both obey it. */
+    .srtRow select, .srtRow button { box-sizing: border-box; height: 30px; }
+    .srtRow select { flex: 1 1 auto; }
+    .srtRow button {
       flex: 0 0 auto;
-      padding: 4px 7px;
-      border-radius: 4px;
-      border: 1px solid rgba(127,127,127,0.4);
-      background: transparent;
-      color: inherit;
+      padding: 0 12px;
+      font: inherit;
+      letter-spacing: inherit;
+      border-radius: 9px;
+      border: 1px solid var(--edge);
+      background: var(--glass-strong);
+      color: var(--ink);
       cursor: pointer;
-      font-size: 12px;
+      transition: background .12s, color .12s, border-color .12s;
     }
-    .muted { color: #888; font-size: 12px; }
-    .status { margin-top: 10px; padding: 8px; border-radius: 6px; background: rgba(127,127,127,0.12); font-size: 12px; }
-    .switch { display: inline-flex; align-items: center; gap: 6px; }
-    .apihelp { margin: -4px 0 6px 0; font-size: 11.5px; color: #888; text-align: right; }
-    .apihelp a { color: inherit; }
-    .paidControls { display: none; margin: 6px 0 2px; }
+    /* Downloading is an action, so on hover it reads like the other action in
+       this popup rather than like one more field. */
+    .srtRow button:hover {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--accent-ink);
+    }
+
+    /* ---- buttons ---- */
+    #liveToggle {
+      width: 100%; padding: 10px; font: inherit; letter-spacing: inherit;
+      font-weight: 700; cursor: pointer;
+      border: 0; border-radius: 11px;
+      background: var(--accent); color: var(--accent-ink);
+      box-shadow: 0 4px 12px rgba(223, 85, 80, 0.3);
+      transition: filter .12s, transform .08s;
+    }
+    #liveToggle:hover { filter: brightness(1.06); }
+    #liveToggle:active { transform: scale(0.985); }
+
+    .paidControls { display: none; margin: 8px 0 2px; }
     .paidControls button {
-      width: 100%;
-      padding: 7px 8px;
-      border-radius: 6px;
-      border: 1px solid rgba(127,127,127,0.45);
-      background: rgba(62,166,255,0.16);
-      color: inherit;
-      font-weight: 700;
-      cursor: pointer;
+      width: 100%; padding: 8px; font: inherit; font-weight: 700; cursor: pointer;
+      border: 0; border-radius: 10px;
+      background: var(--accent); color: var(--accent-ink);
+      box-shadow: 0 4px 12px rgba(223, 85, 80, 0.28);
     }
-    .askRow { display: none; justify-content: flex-start; }
-    hr { border: none; border-top: 1px solid rgba(127,127,127,0.2); margin: 12px 0 8px; }
+
+    /* ---- text ---- */
+    .panel[hidden] { display: none; }
+    .muted { color: var(--ink-soft); font-size: 12px; }
+    .liveStatus { font-size: 12px; color: var(--ink-soft); margin: 9px 0; line-height: 1.55; }
+    .liveStatus a { color: var(--accent); }
+    .apihelp { margin: -2px 0 6px; font-size: 11.5px; color: var(--ink-soft); text-align: right; }
+    .apihelp a { color: var(--accent); }
+    .secHead {
+      font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em;
+      color: var(--ink-soft); font-weight: 700; margin: 14px 0 2px;
+      border-top: 1px solid var(--edge); padding-top: 12px;
+    }
+    /* Plain text under the card, not a card of its own. A white rounded box
+       reads as something you can press, and this is only a report. */
+    .status {
+      /* Indented to the card's inner text rather than flush with the card's
+         outer edge — sharing an edge with the panel above reads as a mistake
+         rather than as alignment. */
+      margin: 10px 12px 0;
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--ink-soft);
+    }
+    /* Dark follows the browser — no switch of its own. Same identity: frosted
+       panels over a warm ground with rose blooms behind them, inverted. The
+       accent lifts a little because the shipped red is too dark to read
+       against a dark panel, and the text on it flips to near-black. */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --ink: #f4e9e9;
+        --ink-soft: #ab9397;
+        --accent: #ff6f66;
+        --accent-ink: #2a1214;
+        --glass: rgba(255, 255, 255, 0.07);
+        --glass-strong: rgba(255, 255, 255, 0.11);
+        --hairline: rgba(255, 255, 255, 0.13);
+        --edge: rgba(255, 255, 255, 0.16);
+        --shadow: 0 6px 22px rgba(0, 0, 0, 0.5);
+        --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23f4e9e9' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      }
+      body {
+        background:
+          radial-gradient(190px 190px at calc(100% + 24px) -28px,
+                          rgba(255, 96, 96, 0.3), transparent 70%),
+          radial-gradient(230px 230px at -46px calc(100% + 46px),
+                          rgba(255, 140, 110, 0.22), transparent 70%),
+          linear-gradient(168deg, #241a1b 0%, #2c1f21 46%, #382528 100%);
+      }
+      .tabs { background: rgba(255, 255, 255, 0.05); }
+      .tabs button[aria-selected="true"] { background: rgba(255, 111, 102, 0.2); }
+      .tabs button:hover:not([aria-selected="true"]) { background: rgba(255, 255, 255, 0.08); }
+      .gear:hover { background: rgba(255, 255, 255, 0.1); }
+      .apiKeyWrap input:disabled { background: rgba(255, 255, 255, 0.06); }
+      .keyEdit:hover, .row select:hover { background-color: rgba(255, 255, 255, 0.14); }
+      .keyState.ok { color: #5fd08b; }
+      .keyState.missing { color: #f0b45e; }
+      #liveToggle { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45); }
+      .paidControls button { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45); }
+    }
   </style>
 </head>
 <body>
-  <h1 data-i18n="appTitle">HappySubs</h1>
+  <div class="titleBar">
+    <h1 class="wordmark" aria-label="HappySubs">
+      <svg viewBox="139 553 7754 1156" aria-hidden="true" focusable="false">
+      <title>HappySubs</title>
+      <!-- Wordmark in currentColor so one file serves light and dark; the bar
+      below it keeps the brand red. -->
+      <g fill="currentColor">
+      <path d="M139.4,1483.69v-914.31h351.02v347.85h233.17v-347.85h351.02v914.31h-351.02v-353.56h-233.17v353.56H139.4Z"/>
+      <path d="M1397.82,1491.99c-47.39,0-89.15-9.46-125.27-28.39-36.07-18.88-64.29-44.42-84.65-76.6-20.28-32.19-30.41-68.37-30.41-108.54v-.57c0-46.3,11.57-85.37,34.72-117.22,23.19-31.81,56.88-56.84,101.06-75.08,44.18-18.25,98.21-29.57,162.08-33.96l292.03-19.77v153.27l-244.39,17.55c-25.01,1.56-43.09,7.03-54.24,16.41s-16.73,21.71-16.73,37v.51c0,16.14,6.46,28.39,19.39,36.75,12.93,8.41,30.27,12.61,52.02,12.61,18.59,0,34.79-2.91,48.6-8.74,13.81-5.83,24.61-13.88,32.38-24.14,7.77-10.31,11.66-21.82,11.66-34.53v-220.81c0-17.28-5.64-30.98-16.92-41.12-11.28-10.18-28.79-15.27-52.53-15.27-24.25,0-42.92,4.46-56.01,13.37-13.14,8.91-20.91,19.41-23.32,31.49l-1.27,6.4h-250.72l.63-8.43c3.84-49.42,19.83-92.19,47.96-128.31,28.13-36.12,67.44-64.04,117.92-83.76,50.48-19.73,110.95-29.59,181.4-29.59s125.6,10.2,175.83,30.6c50.18,20.44,89.28,48.87,117.28,85.28,27.96,36.45,41.95,78.59,41.95,126.41v478.89h-282.21v-93.27h-5.45c-13.18,21.67-28.98,40.15-47.39,55.44-18.46,15.25-39.79,26.76-64,34.53-24.25,7.73-51.39,11.6-81.42,11.6Z"/>
+      <path d="M1972.57,1705.45v-921.97h262.25v126.34h5.77c10.94-29.61,26.21-55,45.81-76.16,19.64-21.16,42.98-37.36,70.01-48.6,27.03-11.19,57.05-16.79,90.04-16.79,58.76,0,108.5,14.05,149.22,42.14,40.76,28.09,71.79,69.3,93.08,123.62,21.29,54.32,31.93,120.64,31.93,198.95v.63c0,77.85-10.43,143.94-31.3,198.26-20.87,54.32-51.45,95.74-91.75,124.25-40.34,28.55-89.68,42.83-148.01,42.83-33.84,0-64.59-5.51-92.25-16.54-27.71-10.98-51.47-26.63-71.28-46.95-19.85-20.32-35.23-44.65-46.13-72.99h-5.13v342.98h-262.25ZM2344.37,1287.96c22.56,0,42.07-6.27,58.55-18.82,16.47-12.55,29.21-30.33,38.21-53.35,9-22.98,13.5-50.37,13.5-82.18v-.63c0-32.23-4.6-59.86-13.81-82.88-9.21-23.02-22.05-40.59-38.52-52.72-16.52-12.12-35.82-18.18-57.91-18.18s-41.54,6.06-58.23,18.18c-16.73,12.12-29.67,29.67-38.84,52.65-9.17,23.02-13.75,50.88-13.75,83.57v.63c0,32.23,4.58,59.86,13.75,82.88,9.17,23.02,21.99,40.57,38.46,52.65,16.52,12.12,36.05,18.18,58.61,18.18Z"/>
+      <path d="M2804.12,1705.45v-916.9h243.62v124.51h5.32c11.32-29.15,26.84-54.13,46.57-74.96,19.73-20.82,43.09-36.77,70.08-47.84,26.99-11.07,56.88-16.6,89.66-16.6,58.42,0,108.09,14.05,149.03,42.14,40.89,28.09,72.11,69.11,93.65,123.05,21.54,53.98,32.31,119.56,32.31,196.74v.63c0,76.79-10.6,142.16-31.81,196.1-21.16,53.94-52,95.15-92.51,123.62-40.47,28.47-89.68,42.71-147.63,42.71-33.5,0-64.04-5.45-91.62-16.35-27.63-10.86-51.41-26.32-71.34-46.38-19.98-20.06-35.63-44.1-46.95-72.11h-4.75v341.64h-243.62ZM3167.18,1301.59c24.54,0,45.79-6.72,63.74-20.15,17.95-13.47,31.81-32.55,41.56-57.22,9.72-24.67,14.57-54.01,14.57-88.01v-.63c0-34.51-4.96-64.1-14.89-88.77s-23.87-43.53-41.82-56.58c-17.91-13.05-38.97-19.58-63.17-19.58s-45.07,6.57-63.23,19.71c-18.16,13.09-32.27,31.98-42.33,56.65-10.05,24.67-15.08,54.39-15.08,89.15v.63c0,34.3,5.03,63.78,15.08,88.45,10.1,24.67,24.12,43.57,42.07,56.71,17.95,13.09,39.12,19.64,63.49,19.64Z"/>
+      <path d="M3750.43,1708.37c-21.88,0-42.9-1.01-63.04-3.04-20.15-2.03-36.73-4.16-49.74-6.4v-162.84c7.52,1.48,17.74,3.04,30.67,4.69,12.93,1.69,28.11,2.53,45.56,2.53,23.74,0,42.43-3.78,56.07-11.34,13.6-7.56,23.06-18.92,28.39-34.09l5.07-14.07-237.29-690.2h248.5l133.76,564.87-24.9-43.34h35.36l-25.41,43.34,133.44-564.87h237.35l-219.8,687.03c-18.88,59.31-43.7,105.52-74.45,138.63-30.75,33.07-67.63,56.2-110.63,69.38-43.04,13.14-92.68,19.71-148.9,19.71Z"/>
+      <path d="M4327.21,1214.53h221.19c2.91,20.99,11.83,39.66,26.74,56.01,14.87,16.39,34.38,29.21,58.55,38.46,24.12,9.25,51.13,13.88,81.04,13.88s54.83-3.93,76.54-11.79c21.75-7.86,38.76-18.86,51.01-33.01,12.25-14.15,18.37-30.96,18.37-50.44,0-22.68-7.94-41.25-23.82-55.69-15.88-14.45-46.97-28.77-93.27-42.96l-87.44-26.8c-76.25-23.32-133.95-55.42-173.1-96.31-39.16-40.93-58.74-92.55-58.74-154.86s15.76-112.02,47.27-156.63c31.47-44.61,74.85-79.18,130.14-103.72,55.25-24.54,118.44-36.81,189.58-36.81,74.68,0,139.44,11.3,194.27,33.9,54.83,22.64,97.2,55.08,127.1,97.32,29.95,42.24,45.07,92.91,45.37,152h-214.23c-.63-21.33-7.16-40.04-19.58-56.14-12.42-16.05-29.57-28.6-51.45-37.64-21.84-9.04-47.48-13.56-76.92-13.56s-52.19,4.18-72.55,12.55c-20.32,8.41-35.82,19.58-46.51,33.52-10.69,13.94-16.03,29.44-16.03,46.51,0,22.13,8.58,41.06,25.72,56.77,17.15,15.67,46.3,29.76,87.44,42.26l90.86,26.74c80.55,23.65,139.65,54.53,177.29,92.63,37.64,38.1,56.46,89.15,56.46,153.14,0,60.32-15.99,113.4-47.96,159.23s-76.96,81.65-134.96,107.46c-58,25.77-126.32,38.65-204.97,38.65s-144.99-11.21-202.19-33.64c-57.19-22.43-101.48-54.93-132.87-97.51-31.43-42.54-47.54-93.71-48.34-153.52Z"/>
+      <path d="M5959.97,793.74l-146.81,689.94h-211.18l23.32-108.98h-4.5c-13.14,24.8-30.69,46.66-52.65,65.58-21.97,18.97-47.16,33.64-75.59,44.04-28.39,10.39-58.99,15.59-91.81,15.59-43.76,0-81.82-8.38-114.18-25.15-32.36-16.81-57.3-40.28-74.83-70.39-17.57-30.16-26.36-65.2-26.36-105.12,0-14.4.76-29.61,2.28-45.62,1.56-16.01,3.82-30.6,6.78-43.78l88.14-416.09h218.03l-81.42,380.87c-1.27,7.31-2.34,15.1-3.23,23.38-.84,8.28-1.27,15.88-1.27,22.81,0,32.36,8.85,57.15,26.55,74.39,17.74,17.23,43.13,25.85,76.16,25.85,23.44,0,44.65-5.26,63.62-15.78,18.92-10.56,34.85-25.45,47.77-44.67,12.93-19.22,22.18-42.07,27.75-68.56l84.71-398.29h218.72Z"/>
+      <path d="M6385.25,1494.14c-33.96,0-65.45-5.72-94.47-17.17-29.06-11.45-53.71-27.54-73.94-48.28-20.28-20.78-34.66-44.94-43.15-72.49h-4.56l-27.12,127.48h-211.5l195.03-914.31h217.9l-70.08,324.73h5.26c20.74-34.64,49.59-61.78,86.55-81.42,36.96-19.6,77.64-29.4,122.03-29.4,48.24,0,89.95,10.86,125.14,32.57,35.19,21.67,62.39,52.67,81.61,93.01,19.18,40.34,28.77,88.66,28.77,144.97,0,61.38-8.28,118.61-24.84,171.71-16.56,53.14-39.94,99.88-70.14,140.22-30.16,40.34-65.81,71.81-106.95,94.41-41.18,22.64-86.36,33.96-135.53,33.96ZM6332.22,1320.09c23.57,0,45.47-6,65.71-17.99,20.19-12,37.78-28.74,52.78-50.25,14.95-21.46,26.61-46.32,34.98-74.58,8.36-28.22,12.55-58.36,12.55-90.42,0-41.35-10.1-74.26-30.29-98.72-20.19-24.5-47.71-36.75-82.56-36.75-23.23,0-45.09,6.23-65.58,18.69-20.53,12.46-38.48,29.65-53.86,51.58-15.38,21.88-27.44,46.95-36.18,75.21-8.7,28.26-13.05,58.25-13.05,89.97,0,39.88,10.54,72.04,31.62,96.5,21.08,24.5,49.04,36.75,83.89,36.75Z"/>
+      <path d="M6838.16,1003.91c0-45.41,12.5-85.05,37.51-118.93s60.09-60.24,105.24-79.08c45.11-18.84,98.25-28.26,159.42-28.26,57.41,0,108.2,9.61,152.38,28.83,44.18,19.18,79.05,45.89,104.61,80.15,25.56,34.22,39.01,73.71,40.36,118.49h-196.17c-1.06-15.71-6.1-29.65-15.14-41.82-9.08-12.17-21.27-21.63-36.56-28.39-15.25-6.76-32.8-10.14-52.65-10.14-18.88,0-35.21,2.49-48.98,7.48-13.77,5.03-24.37,12.06-31.81,21.1-7.39,9.04-11.09,19.62-11.09,31.74,0,15.16,6.38,27.58,19.14,37.26,12.76,9.67,36.71,20.36,71.85,32.06l73.5,24.52c65.26,21.71,111.69,47.04,139.27,75.97,27.63,28.89,41.44,66.38,41.44,112.47s-13.03,87.04-39.09,121.97c-26.06,34.93-62.5,62.09-109.3,81.48-46.84,19.39-101.72,29.08-164.61,29.08s-119.63-9.69-167.27-29.08c-47.61-19.39-84.76-46.76-111.45-82.12-26.7-35.36-40.99-76.63-42.9-123.81h207.07c2.15,25.64,13.94,46.59,35.36,62.85,21.46,16.31,49.89,24.46,85.28,24.46,18.84,0,35.04-2.51,48.6-7.54,13.52-5.07,23.95-12.21,31.3-21.42,7.39-9.21,11.09-19.92,11.09-32.12,0-14.32-6.21-26.1-18.63-35.36-12.46-9.25-35.57-19.45-69.32-30.6l-61.84-20.66c-63.87-21.5-110.92-48.45-141.17-80.85-30.29-32.36-45.43-72.27-45.43-119.75Z"/>
+      <rect x="7532.75" y="1241.83" width="359.99" height="136.04"/>
+      </g>
+      <g fill="#e4262c">
+      <rect x="7532.75" y="1377.87" width="359.99" height="136.04"/>
+      </g>
+      </svg>
+    </h1>
+    <button type="button" id="openSettings" class="gear" data-i18n-title="openSettings" title="设置" aria-label="设置">⚙</button>
+  </div>
+
+  <div id="mainView">
 
   <div class="row">
     <label class="switch"><input type="checkbox" id="enabled" /> <span data-i18n="enable">启用</span></label>
@@ -85,14 +339,11 @@
   </div>
 
   <div class="panel" id="panelLive" hidden>
-    <div class="scopeNote" data-i18n="liveScope">三个平台都能用；主要是给 B站——那里大部分视频没有字幕轨。需要先装本地识别服务。</div>
     <button type="button" id="liveToggle" data-i18n="liveStart">开启实时听译</button>
     <div class="liveStatus" id="liveStatus"></div>
   </div>
 
   <div class="panel" id="panelTranslate">
-
-  <div class="scopeNote" data-i18n="translateScope">支持 YouTube、Vimeo、B站，包括嵌在其他网站里的 Vimeo 播放器。</div>
 
   <div class="row">
     <label class="switch"><input type="checkbox" id="translationOnly" /> <span data-i18n="translationOnly">仅显示翻译字幕（不用开原生字幕）</span></label>
@@ -107,12 +358,28 @@
     <label for="provider" data-i18n="translationSource">翻译源</label>
     <select id="provider">
       <option value="google" data-i18n="providerGoogle">Google Translate（免费）</option>
-      <option value="claude" data-i18n="providerClaude">Claude Haiku · 高质量</option>
-      <option value="openai" data-i18n="providerOpenai">OpenAI GPT-4o mini · 高质量</option>
-      <option value="gemini" data-i18n="providerGemini">Google Gemini · 有免费额度</option>
-      <option value="deepseek" data-i18n="providerDeepseek">DeepSeek · 高性价比</option>
+      <option value="claude" data-i18n="providerClaude">Claude</option>
+      <option value="openai" data-i18n="providerOpenai">OpenAI</option>
+      <option value="gemini" data-i18n="providerGemini">Google Gemini</option>
+      <option value="deepseek" data-i18n="providerDeepseek">DeepSeek</option>
     </select>
   </div>
+
+  <div class="row" id="modelRow" style="display:none;">
+    <label for="model" data-i18n="model">模型</label>
+    <!-- A plain select, because the list has to be readable at a glance — a
+         datalist filters itself down to whatever is already in the field, so
+         the one model you have chosen is the only one you can see. The last
+         entry swaps the select for a field you can type any model name into;
+         this list is a shortlist, not the provider's whole catalogue. -->
+    <select id="model"></select>
+    <div class="fieldWrap" id="modelCustomWrap" hidden>
+      <input type="text" id="modelCustom" autocomplete="off" spellcheck="false"
+             autocapitalize="off" />
+      <button type="button" id="modelUseList" class="keyEdit" data-i18n="modelList">列表</button>
+    </div>
+  </div>
+  <div class="apihelp" id="modelHelp" style="display:none;" data-i18n="modelCustomHint">列表里没有的模型，选「自定义…」自己填</div>
 
   <div class="row" id="apiKeyRow" style="display:none;">
     <label for="apiKey">API Key</label>
@@ -128,42 +395,117 @@
   <div class="paidControls" id="paidControls">
     <button type="button" id="usePaidApi" data-i18n="usePaidApiBtnGeneric">本视频使用所选 API 翻译</button>
   </div>
-  <div class="row askRow" id="askPaidRow">
-    <label class="switch"><input type="checkbox" id="askPaidApi" /> <span data-i18n="askEachVideo">每次打开视频自动询问是否使用付费 API</span></label>
+  <div class="row" id="askPaidRow" style="display:none;">
+    <label for="paidApiMode" data-i18n="paidPolicy">付费 API</label>
+    <select id="paidApiMode">
+      <option value="ask" data-i18n="paidPolicyAsk">每个视频都问我</option>
+      <option value="always" data-i18n="paidPolicyAlways">所有视频都用它</option>
+      <option value="manual" data-i18n="paidPolicyManual">只在我点按钮时</option>
+    </select>
+  </div>
+
+  <div class="row">
+      <label for="subtitleMode" data-i18n="subtitleMode">字幕样式</label>
+      <select id="subtitleMode">
+        <option value="inline" data-i18n="modeInline">双语字幕</option>
+        <option value="floating" data-i18n="modeFloating">仅显示译文</option>
+      </select>
+  </div>
+  <div class="muted" id="modeNote" style="margin: -4px 0 9px;" data-i18n="modeNote">双语字幕：自带字幕的视频跟随播放器，只有自动生成字幕的视频由插件生成双语字幕。</div>
+
+  <div class="row" id="takeoverRow">
+    <label class="switch"><input type="checkbox" id="takeoverCaptions" /> <span data-i18n="takeoverCaptions">所有视频都由插件画双语</span></label>
+  </div>
+  <div class="muted" id="takeoverNote" style="margin: -4px 0 9px;" data-i18n="takeoverNote">打开后，所有视频字幕均由插件接管原文和译文，可在设置中自定义样式。</div>
+
+  <div class="row srtRow">
+    <label for="srtKind" data-i18n="exportSrt">导出字幕</label>
+    <select id="srtKind">
+      <option value="bilingual" data-i18n="srtBilingual">双语</option>
+      <option value="original" data-i18n="srtOriginal">仅原文</option>
+      <option value="translation" data-i18n="srtTranslation">仅译文</option>
+    </select>
+    <button type="button" id="downloadSrt" class="keyEdit" data-i18n="srtDownload">下载</button>
   </div>
 
   </div><!-- /panelTranslate -->
 
-  <hr />
-  <!-- Everything below applies to both tabs: one overlay, one set of styling. -->
 
-  <div class="row">
-    <label for="bottomOffset" data-i18n="verticalPosition">垂直位置</label>
-    <input type="range" id="bottomOffset" min="0" max="90" step="1" />
-    <span class="muted" id="bottomOffsetVal" style="flex:0 0 auto; min-width:36px; text-align:right;"></span>
-  </div>
+  </div><!-- /mainView -->
 
-  <div class="row">
-    <label for="captionWidth" data-i18n="captionWidth">字幕宽度</label>
-    <input type="range" id="captionWidth" min="20" max="100" step="5" />
-    <span class="muted" id="captionWidthVal" style="flex:0 0 auto; min-width:36px; text-align:right;"></span>
-  </div>
-  <div class="apihelp" data-i18n="captionWidthNote">只在没有原生字幕可对齐时生效：实时听译、以及仅翻译模式。</div>
+  <div id="settingsView" hidden>
 
-  <div class="row">
-    <label for="fontSize" data-i18n="fontSizePx">字号 (px)</label>
-    <input type="number" id="fontSize" min="10" max="60" step="1" />
-  </div>
+    <div class="row">
+      <label for="uiLang" data-i18n="interfaceLanguage">面板语言</label>
+      <select id="uiLang">
+        <option value="auto" data-i18n="langAuto">跟随浏览器</option>
+        <option value="zh" data-i18n="langZh">中文</option>
+        <option value="en" data-i18n="langEn">English</option>
+      </select>
+    </div>
 
-  <div class="row">
-    <label for="color" data-i18n="textColor">文字颜色</label>
-    <input type="color" id="color" />
-  </div>
+    <div class="secHead" data-i18n="appearanceSection">字幕外观</div>
 
-  <div class="row">
-    <label for="bgAlpha" data-i18n="bgOpacity">背景透明度</label>
-    <input type="range" id="bgAlpha" min="0" max="100" step="1" />
-  </div>
+    <div class="muted" id="appearanceNote" hidden data-i18n="appearanceNote">这个视频用的是自带字幕，译文直接加在播放器字幕里，字体和大小跟着播放器走，所以这里没有可调的。自动生成字幕的视频、以及打开上面的开关时，这里会出现外观设置。</div>
+
+    <div id="appearanceControls">
+
+    <div class="row">
+      <label for="bottomOffset" data-i18n="verticalPosition">垂直位置</label>
+      <input type="range" id="bottomOffset" min="0" max="90" step="1" />
+      <span class="muted" id="bottomOffsetVal" style="flex:0 0 auto; min-width:36px; text-align:right;"></span>
+    </div>
+
+    <div class="row">
+      <label for="captionWidth" data-i18n="captionWidth">字幕宽度</label>
+      <input type="range" id="captionWidth" min="20" max="100" step="5" />
+      <span class="muted" id="captionWidthVal" style="flex:0 0 auto; min-width:36px; text-align:right;"></span>
+    </div>
+
+    <div class="row">
+      <label for="bgAlpha" data-i18n="bgOpacity">背景透明度</label>
+      <input type="range" id="bgAlpha" min="0" max="100" step="1" />
+      <span class="muted" id="bgAlphaVal" style="flex:0 0 auto; min-width:36px; text-align:right;"></span>
+    </div>
+
+    <div class="row" id="unifyStylesRow">
+      <label class="switch"><input type="checkbox" id="unifyStyles" /> <span data-i18n="unifyStyles">原文和译文用同一套</span></label>
+    </div>
+
+    <!-- One set, or two. The rows carry their own labels in split mode so it is
+         never ambiguous which language a field belongs to. -->
+    <div class="row" id="sourceStyleHead" hidden>
+      <span class="secHead" style="margin:0" data-i18n="styleSourceHead">原文</span>
+    </div>
+    <div class="row" id="sourceFontRow" hidden>
+      <label for="sourceFontSize" data-i18n="fontSizePx">字号 (px)</label>
+      <input type="number" id="sourceFontSize" min="10" max="60" step="1" />
+    </div>
+    <div class="row" id="sourceColorRow" hidden>
+      <label for="sourceColor" data-i18n="textColor">文字颜色</label>
+      <input type="color" id="sourceColor" />
+    </div>
+
+    <div class="row" id="targetStyleHead" hidden>
+      <span class="secHead" style="margin:0" data-i18n="styleTargetHead">译文</span>
+    </div>
+    <div class="row">
+      <label for="fontSize" data-i18n="fontSizePx">字号 (px)</label>
+      <input type="number" id="fontSize" min="10" max="60" step="1" />
+    </div>
+
+    <div class="row">
+      <label for="color" data-i18n="textColor">文字颜色</label>
+      <input type="color" id="color" />
+    </div>
+
+    <div class="row" style="justify-content: flex-end; margin-top: 12px;">
+      <button type="button" id="resetAppearance" class="resetBtn" data-i18n="resetAppearance">恢复默认外观</button>
+    </div>
+
+    </div><!-- /appearanceControls -->
+
+  </div><!-- /settingsView -->
 
   <div class="status" id="status" data-i18n="loadingInfo">正在获取当前视频的字幕信息…</div>
 

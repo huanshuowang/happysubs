@@ -1,0 +1,545 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>YDS takeover harness</title>
+<link rel="stylesheet" href="../overlay.css">
+<style>
+  body { font: 14px/1.5 -apple-system, sans-serif; margin: 16px; }
+  pre { background: #f4f4f4; padding: 10px; white-space: pre-wrap; }
+  #player { position: relative; width: 640px; height: 320px; margin-top: 12px;
+            background: linear-gradient(135deg, #6b5b45, #cbb89b 60%, #8a7c66); }
+  /* Stands in for the player's own caption strip, so hiding it can be observed. */
+  .ytp-caption-window-container { position: absolute; left: 0; right: 0; bottom: 8%; text-align: center; }
+  .caption-window { display: inline-block; }
+  .ytp-caption-segment { background: rgba(8,8,8,.75); color: #fff; padding: 0 4px; }
+  /* A face nothing else on the page uses, so "it took the player's font" is
+     something the test can actually see. */
+  .ytp-caption-window-container { font-family: Georgia, serif; }
+</style>
+
+<h1>Machine transcripts: does the extension take the caption over?</h1>
+<pre id="out">running…</pre>
+<div id="player">
+  <video id="v"></video>
+  <div class="ytp-caption-window-container">
+    <div class="caption-window"><span class="caption-visual-line"><span class="ytp-caption-segment">creativity</span></span></div>
+  </div>
+</div>
+
+<script>
+// A machine transcript is the case that matters here: the player keeps its
+// rolling caption to two lines, so injecting a third drops one of its own.
+const STORE = { ydsSettings: {
+  enabled: true, secondLang: "zh-Hans", uiLang: "auto", bottomOffset: 20,
+  fontSize: 20, color: "#ffffff", background: "rgba(0,0,0,0.7)",
+  translationProvider: "google", captionWidth: 60, subtitleMode: "inline",
+  // Takeover is opt-in now; this harness is what tests it, so it is on here.
+  // The default (off) is covered at the end.
+  takeoverCaptions: true,
+  translationOnly: false, paidApiAskEachVideo: false, apiKeys: {}, models: {}
+} };
+const messageHandlers = [];
+const storageListeners = [];
+window.__translatedQueries = [];
+const fire = () => storageListeners.forEach(fn =>
+  fn({ ydsSettings: { newValue: JSON.parse(JSON.stringify(STORE.ydsSettings)) } }, "sync"));
+window.chrome = {
+  runtime: { id: "yds-test", getURL: (f) => "/" + f, onMessage: { addListener: (fn) => messageHandlers.push(fn) }, lastError: null },
+  i18n: { getUILanguage: () => "zh-CN" },
+  storage: { sync: { get: (k, cb) => setTimeout(() => cb(JSON.parse(JSON.stringify(STORE))), 0),
+                     set: (o, cb) => { Object.assign(STORE, o); fire(); cb && cb(); } },
+             onChanged: { addListener: (fn) => storageListeners.push(fn) } }
+};
+window.AudioContext = class { constructor(){ this.destination={}; } resume(){return Promise.resolve();}
+  close(){return Promise.resolve();} createMediaStreamSource(){return{connect(){},disconnect(){}};}
+  createScriptProcessor(){return{connect(){},disconnect(){},onaudioprocess:null};}
+  createGain(){return{gain:{value:1},connect(){},disconnect(){}};} };
+HTMLMediaElement.prototype.captureStream = function(){ return {}; };
+
+// Translate by marking the text, so the two languages are told apart by shape.
+const realFetch = window.fetch.bind(window);
+window.fetch = async (url, opts) => {
+  const u = String(url && url.url ? url.url : url);
+  if (u.includes("clients5.google.com") || u.includes("translate.googleapis.com")) {
+    const qs = new URL(u).searchParams.getAll("q");
+    window.__translatedQueries.push(...qs);
+    // Marked text comes back SHORT. The stub otherwise always answers with
+    // something longer than it was given, which hides every case where the
+    // original on screen is the wider of the two lines.
+    const answer = (q) => /\bSHORT\b/.test(q) ? "短句" : "<" + q + ">";
+    return new Response(JSON.stringify(qs.map(q => [answer(q), "en"])),
+                        { status: 200, headers: { "content-type": "application/json" } });
+  }
+  return realFetch(url, opts);
+};
+</script>
+<script src="../i18n.js"></script>
+<script src="../platform.js"></script>
+<script src="../live.js"></script>
+<script>
+window.__ctx = null;
+const captionHost = () => document.querySelector("#player .caption-window");
+window.YDS_PLATFORMS = {
+  detect: () => "youtube",
+  create: (id, ctx) => {
+    window.__ctx = ctx;
+    return {
+      id: "youtube", requiresCcForTracks: false,
+      looksLikeVideoPage: () => true,
+      getVideoId: () => "TESTVID",
+      getVideoEl: () => document.getElementById("v"),
+      getContainer: () => document.getElementById("player"),
+      isCcOn: () => true,
+      nativeLines: () => [captionHost().textContent.trim()],
+      // A rolling auto-caption is rewritten several times a second and its
+      // width changes with every rewrite. Reporting a moving number here is
+      // what made the box jitter, so the harness reports one too.
+      nativeCaptionWidth: () => 120 + (window.__rollTick = (window.__rollTick || 0) + 37) % 160,
+      captionEls: () => document.querySelectorAll("#player .caption-visual-line"),
+      nativeCaptionBox: () => null,
+      renderInline: (lines) => {
+        window.__inlineCalled = (window.__inlineCalled || 0) + 1;
+        window.__lastInline = lines.slice();
+        return true;
+      },
+      clearInline: () => {},
+      observeTarget: () => document.getElementById("player"),
+      start() {}, requestTrack() {}, forgetLoadedCues() {}, reset() {}
+    };
+  }
+};
+window.requestAnimationFrame = (fn) => setTimeout(() => fn(performance.now()), 16);
+</script>
+<script src="../content.js"></script>
+<script>
+const results = [];
+const check = (n, p, d) => results.push({ n, p: !!p, d });
+const settle = (ms) => new Promise(r => setTimeout(r, ms));
+const overlay = () => document.querySelector("#yt-dual-sub-overlay");
+const shown = (sel) => {
+  const el = overlay() && overlay().querySelector(sel);
+  if (!el) return "";
+  const clip = el.closest(".yds-clip");
+  if (clip && clip.style.display === "none") return "";
+  return (el.textContent || "").trim();
+};
+// The player's caption is hidden on the elements that carry the text, so that
+// is what has to be checked — a container that stays visible around hidden
+// lines would have passed the old check while the text was still on screen.
+const nativeHidden = () => {
+  const els = [...document.querySelectorAll("#player .caption-visual-line")];
+  return els.length > 0 && els.every(el => getComputedStyle(el).visibility === "hidden");
+};
+
+let at = 0;
+const cue = (text) => { const s0 = at; at += 4; return { start: s0, end: s0 + 3.5, text }; };
+
+async function playAt(t) {
+  Object.defineProperty(document.getElementById("v"), "currentTime", { get: () => t, configurable: true });
+  await settle(300);
+}
+
+(async () => {
+  await settle(700);
+
+  // One ASR sentence split at arbitrary timing boundaries, including a rolling
+  // one-word overlap. It must be translated and displayed as one sentence.
+  const c1 = { start: 0, end: 1.2, text: "creativity questions" };
+  const c1b = { start: 1.2, end: 2.4, text: "questions or ideas" };
+  const c1c = { start: 2.4, end: 3.6, text: "that you can bring." };
+  at = 4;
+  const c2 = cue("A second complete sentence.");
+  // kind "asr": a machine transcript, which is what triggers the takeover.
+  window.__ctx.ingest({ cues: [c1, c1b, c1c, c2], lang: "en", isAsr: true, isNativeTarget: false, key: "asr1" });
+  await settle(1400);
+
+  await playAt(c1.start + 1);
+
+  // The two lines move at different speeds on purpose: the original follows the
+  // fragments, so it keeps pace with the voice, while the translation is the
+  // whole sentence's and holds still underneath it.
+  check("the translation is the whole sentence's",
+        shown(".yds-text") === "<creativity questions or ideas that you can bring>",
+        JSON.stringify(shown(".yds-text")));
+  check("the original is the assembled sentence, not the rolling fragment",
+        shown(".yds-source") === "creativity questions or ideas that you can bring.",
+        JSON.stringify(shown(".yds-source")));
+  check("ASR fragments were translated only after sentence assembly",
+        window.__translatedQueries.includes("creativity questions or ideas that you can bring.")
+        && !window.__translatedQueries.includes("creativity questions"),
+        JSON.stringify(window.__translatedQueries));
+
+  // Moving to the next fragment of the SAME sentence: neither line may move.
+  // Both are the sentence, so the box holds still for as long as it lasts —
+  // this is what the fragment-granularity original got wrong.
+  await playAt(c1b.start + 0.5);
+  check("the original does not change within one sentence",
+        shown(".yds-source") === "creativity questions or ideas that you can bring.",
+        JSON.stringify(shown(".yds-source")));
+  check("…nor does the translation under it",
+        shown(".yds-text") === "<creativity questions or ideas that you can bring>",
+        JSON.stringify(shown(".yds-text")));
+  check("…and the word the rolling transcript repeated is not shown twice",
+        shown(".yds-source").match(/questions/g).length === 1,
+        JSON.stringify(shown(".yds-source")));
+  await playAt(c1.start + 1);
+  check("the player's own caption is hidden", nativeHidden(), "");
+  // A plate's height comes from the font's ascent and descent, and CJK faces
+  // are taller — one padding cannot suit both scripts, so the padding follows
+  // the language. Without this the two rows of one Chinese sentence overlapped.
+  // End to end: change the setting, read what the screen actually renders.
+  // The two sizes must move independently — a missing sourceFontSize used to
+  // fall back to the translation's, which looked like "the original cannot be
+  // changed, and changing the translation drags it along".
+  const sizeOf = (sel) => parseFloat(getComputedStyle(overlay().querySelector(sel)).fontSize);
+  STORE.ydsSettings.unifyStyles = false;
+  STORE.ydsSettings.fontSize = 18;
+  STORE.ydsSettings.sourceFontSize = 40;
+  fire();
+  await settle(250);
+  const bigSrc = sizeOf(".yds-source");
+  const normTxt = sizeOf(".yds-text");
+  check("the original's own size reaches the screen",
+        bigSrc > normTxt * 1.8, JSON.stringify([bigSrc, normTxt]));
+  // Written onto the element, not left to the stylesheet. The manifest's CSS is
+  // cached by Chrome until the extension is reloaded, so new JS can meet an old
+  // overlay.css — measured on a live page, with the variable set and the line
+  // still computing the 0.86em the old rule hard-coded.
+  check("…set on the line itself, so a stale stylesheet cannot strand it",
+        overlay().querySelector(".yds-source").style.fontSize === `${Math.round(bigSrc)}px`,
+        JSON.stringify([overlay().querySelector(".yds-source").style.fontSize, bigSrc]));
+
+  STORE.ydsSettings.sourceFontSize = 12;
+  fire();
+  await settle(250);
+  check("…and follows the setting down again, on its own",
+        sizeOf(".yds-source") < bigSrc / 2
+        && Math.abs(sizeOf(".yds-text") - normTxt) < 0.5,
+        JSON.stringify([sizeOf(".yds-source"), sizeOf(".yds-text")]));
+
+  // The other direction: the translation moves without dragging the original.
+  STORE.ydsSettings.fontSize = 36;
+  fire();
+  await settle(250);
+  check("…and changing the translation leaves the original where it was",
+        sizeOf(".yds-text") > normTxt * 1.8
+        && sizeOf(".yds-source") < bigSrc / 2,
+        JSON.stringify([sizeOf(".yds-source"), sizeOf(".yds-text")]));
+
+  // A missing sourceFontSize must fall back to a PROPORTION, never to equality.
+  delete STORE.ydsSettings.sourceFontSize;
+  fire();
+  await settle(250);
+  check("…and with no size of its own it is a proportion, not a copy",
+        sizeOf(".yds-source") < sizeOf(".yds-text") * 0.95,
+        JSON.stringify([sizeOf(".yds-source"), sizeOf(".yds-text")]));
+
+  // Put the fixture back exactly as it started, or the rows this block grew
+  // are still grown when the checks below measure them.
+  STORE.ydsSettings.fontSize = 20;
+  delete STORE.ydsSettings.sourceFontSize;
+  fire();
+  await settle(250);
+
+  check("the translation's plate is told it is CJK",
+        overlay().classList.contains("yds-text-cjk")
+        && !overlay().classList.contains("yds-source-cjk"),
+        overlay().className);
+  check("nothing was injected into the player's caption",
+        !window.__inlineCalled, String(window.__inlineCalled || 0));
+  // The plate is painted on the text span, so that is where the background is.
+  const paintedRows = [...overlay().querySelectorAll(".yds-line")]
+    .filter(el => getComputedStyle(el).backgroundColor !== "rgba(0, 0, 0, 0)");
+  check("each language has its own text-hugging background", paintedRows.length === 2,
+        JSON.stringify(paintedRows.map(el => Math.round(el.getBoundingClientRect().width))));
+  check("the shared wrapper paints no wide grey slab",
+        getComputedStyle(overlay().querySelector(".yds-live-box")).backgroundColor === "rgba(0, 0, 0, 0)",
+        getComputedStyle(overlay().querySelector(".yds-live-box")).backgroundColor);
+  check("the overlay itself paints nothing, so there is no box around the box",
+        getComputedStyle(overlay()).backgroundColor === "rgba(0, 0, 0, 0)",
+        getComputedStyle(overlay()).backgroundColor);
+  check("each subtitle row stays on one line",
+        overlay().querySelector(".yds-source").getClientRects().length === 1
+        && overlay().querySelector(".yds-text").getClientRects().length === 1,
+        JSON.stringify([overlay().querySelector(".yds-source").getClientRects().length,
+                        overlay().querySelector(".yds-text").getClientRects().length]));
+  check("the subtitle boundary never exceeds 65% of the player",
+        Math.max(...paintedRows.map(el => el.getBoundingClientRect().width)) <= document.getElementById("player").getBoundingClientRect().width * 0.65 + 1,
+        JSON.stringify([Math.max(...paintedRows.map(el => el.getBoundingClientRect().width)),
+                        document.getElementById("player").getBoundingClientRect().width]));
+  check("it is still placed where the viewer put it, not pinned to the player's strip",
+        overlay().style.bottom === "20%", overlay().style.bottom);
+
+  // The bug this was reported as: with the player's strip rewritten several
+  // times a second, following its width re-wrapped our text on every frame and
+  // the two languages appeared to flicker. Taken over, the box is ours and the
+  // player's measurements are not consulted at all.
+  const widths = [];
+  for (let i = 0; i < 6; i++) { await settle(120); widths.push(Math.round(overlay().getBoundingClientRect().width)); }
+  check("the box does not resize while the player's caption rolls underneath",
+        new Set(widths).size === 1, JSON.stringify(widths));
+  check("…and the text keeps the same number of lines",
+        overlay().querySelector(".yds-text").getClientRects().length === 1,
+        String(overlay().querySelector(".yds-text").getClientRects().length));
+
+  // The original is the video's own words, so it is set in the player's own
+  // caption face rather than the panel's.
+  const nativeFace = getComputedStyle(document.querySelector(".ytp-caption-segment")).fontFamily;
+  check("the original line borrows the player's caption font",
+        getComputedStyle(overlay().querySelector(".yds-source")).fontFamily === nativeFace,
+        JSON.stringify([nativeFace, getComputedStyle(overlay().querySelector(".yds-source")).fontFamily]));
+  check("…while the translation keeps ours",
+        getComputedStyle(overlay().querySelector(".yds-text")).fontFamily !== nativeFace,
+        getComputedStyle(overlay().querySelector(".yds-text")).fontFamily.slice(0, 30));
+
+  // "Separate layer" is the opposite request: the player keeps showing the
+  // original itself, and our box carries the translation alone.
+  STORE.ydsSettings.subtitleMode = "floating";
+  fire();
+  await settle(400);
+  check("separate layer gives the player its caption back", !nativeHidden(), "");
+  check("…without rewriting the player's rolling English",
+        captionHost().textContent.trim() === "creativity", captionHost().textContent.trim());
+  check("…and our box drops the original, keeping only the translation",
+        shown(".yds-source") === "" && shown(".yds-text") !== "",
+        JSON.stringify([shown(".yds-source"), shown(".yds-text")]));
+  STORE.ydsSettings.subtitleMode = "inline";
+  fire();
+  await settle(400);
+  check("switching back takes it over again",
+        nativeHidden() && shown(".yds-source") !== "",
+        JSON.stringify([shown(".yds-source"), shown(".yds-text")]));
+
+  // Moving on keeps the two lines in step: both come from the same cue.
+  await playAt(c2.start + 1);
+  check("the next cue moves both languages together",
+        shown(".yds-source") === "A second complete sentence."
+        && shown(".yds-text") === "<A second complete sentence>",
+        JSON.stringify([shown(".yds-source"), shown(".yds-text")]));
+
+  // A real-world failure shape: several complete sentences arrive inside one
+  // ASR event. The period inside the cue must win before the width limiter.
+  const firstSentence = "Brainstorming is all about generating hypotheses in a structured way.";
+  const multiSentence = firstSentence +
+    " Besides being useful for generating ideas and hypotheses, brainstorming is also the first structuring building block that you're going to learn.";
+  const longCue = { start: 20, end: 28, text: multiSentence };
+  window.__ctx.ingest({ cues: [longCue], lang: "en", isAsr: true,
+                        isNativeTarget: false, key: "asr-multi-sentence" });
+  await settle(1400);
+  await playAt(20.5);
+  check("a period inside one ASR event starts a new subtitle",
+        firstSentence.startsWith(shown(".yds-source"))
+        && !shown(".yds-source").includes("Besides"), JSON.stringify(shown(".yds-source")));
+  check("…and the translator never receives the two sentences glued together",
+        !window.__translatedQueries.some(q => q.includes(". Besides"))
+        && !window.__translatedQueries.includes(multiSentence),
+        JSON.stringify(window.__translatedQueries.slice(-5)));
+  check("…the corrected sentence still stays on one line and within 65%",
+        overlay().querySelector(".yds-source").getClientRects().length === 1
+        && overlay().getBoundingClientRect().width <= document.getElementById("player").getBoundingClientRect().width * 0.65 + 1,
+        JSON.stringify([overlay().querySelector(".yds-source").getClientRects().length,
+                        overlay().getBoundingClientRect().width]));
+
+  // Within one sentence the translation does not change, so neither may the box
+  // around it. The width used to be max(original, translation), and the
+  // original is a fragment that changes on every beat of the speech — so the
+  // box breathed in and out under a translation that was standing still, and a
+  // translation long enough to wrap re-broke its lines every time it did. That
+  // is the flicker "in the middle of a subtitle".
+  const s1 = { start: 200, end: 201.5, text: "SHORT a considerably longer opening fragment here" };
+  const s2 = { start: 201.5, end: 203, text: "tiny" };
+  const s3 = { start: 203, end: 204.5, text: "and a short tail." };
+  window.__ctx.ingest({ cues: [s1, s2, s3], lang: "en", isAsr: true,
+                        isNativeTarget: false, key: "asr-width" });
+  await settle(1400);
+  const widthAt = async (t) => { await playAt(t); return overlay().getBoundingClientRect().width; };
+  const wA = await widthAt(s1.start + 0.5);
+  const srcA = shown(".yds-source");
+  const wB = await widthAt(s2.start + 0.5);
+  const srcB = shown(".yds-source");
+  const wC = await widthAt(s3.start + 0.5);
+  // Both lines are the sentence, so neither moves while it lasts. The width
+  // check below is what this fixture is really for, and it is only meaningful
+  // if the text on screen is genuinely unchanged across the three moments.
+  check("neither line moves within the sentence",
+        srcA === srcB && srcA !== "" && shown(".yds-text") === "短句",
+        JSON.stringify([srcA, srcB, shown(".yds-text")]));
+  check("the box does not resize as the original advances within one sentence",
+        Math.abs(wA - wB) <= 1 && Math.abs(wB - wC) <= 1,
+        JSON.stringify([Math.round(wA), Math.round(wB), Math.round(wC)]));
+
+  // A sentence too long to fit on one line used to run straight out of its own
+  // background and off the side of the video: the plate was clamped to the
+  // overlay's width while the text inside it was nowrap. It has to wrap and
+  // stay inside the player instead — and because only the original overflowed,
+  // this is also what made the translation under it look off-centre.
+  const longSentence = "I walked you through how a framework is nothing more than a map to solve a problem in a structured way.";
+  const wide = cue(longSentence);
+  window.__ctx.ingest({ cues: [wide], lang: "en", isAsr: true,
+                        isNativeTarget: false, key: "asr-overflow" });
+  await settle(1200);
+  await playAt(wide.start + 1);
+  const playerBox = document.getElementById("player").getBoundingClientRect();
+  const sourceRects = [...overlay().querySelector(".yds-source").getClientRects()];
+  check("a long original wraps instead of running past the player",
+        sourceRects.length > 0
+        && sourceRects.every(r => r.left >= playerBox.left - 1 && r.right <= playerBox.right + 1),
+        JSON.stringify([playerBox.left, playerBox.right,
+                        sourceRects.map(r => [Math.round(r.left), Math.round(r.right)])]));
+  check("…and every wrapped row carries its own background",
+        sourceRects.length >= 1
+        && getComputedStyle(overlay().querySelector(".yds-source")).backgroundColor !== "rgba(0, 0, 0, 0)",
+        String(sourceRects.length));
+
+  // The switch is about videos with their OWN captions. An auto-generated track
+  // is taken over either way: its rolling line is not the sentence we
+  // translated, so there is nothing there worth keeping.
+  STORE.ydsSettings.takeoverCaptions = false;
+  fire();
+  await settle(150);
+  await playAt(wide.start + 1);
+  check("a machine transcript is taken over with the switch off too", nativeHidden(), "");
+  // The invariant that matters: whatever unit the original is showing, the
+  // translation under it is that same unit — never a fragment of one against
+  // the whole of the other.
+  check("…and both lines are the same unit",
+        shown(".yds-source") !== ""
+        && shown(".yds-text") === "<" + shown(".yds-source").replace(/\.$/, "") + ">",
+        JSON.stringify([shown(".yds-source"), shown(".yds-text")]));
+  check("…and nothing was injected into the rolling auto-caption",
+        !window.__inlineCalled, String(window.__inlineCalled || 0));
+  STORE.ydsSettings.takeoverCaptions = true;
+  fire();
+  await settle(150);
+  await playAt(wide.start + 1);
+
+  // Past the end: nothing on screen, and the player gets its caption back.
+  await playAt(longCue.end + 5);
+  check("after the last cue the overlay clears", shown(".yds-text") === "" && shown(".yds-source") === "",
+        JSON.stringify([shown(".yds-source"), shown(".yds-text")]));
+  // Still hidden, on purpose: the player's rolling caption does not pause
+  // between our cues, so handing it back in the gaps would make it flash.
+  check("…but the player's caption stays hidden between cues", nativeHidden(), "");
+
+  // A human-authored track goes down the inline path: its cue boundaries are
+  // the author's, so the player's own line is the line we translated and the
+  // translation can simply be injected under it.
+  await playAt(c1.start + 1);
+  check("machine transcript is still taken over", nativeHidden(), "");
+  STORE.ydsSettings.takeoverCaptions = false;
+  fire();
+  await settle(150);
+  // Two cues the author deliberately cut mid-clause. They must NOT be merged:
+  // our line has to change exactly when the player's does, or the Chinese under
+  // the caption is a line behind the English above it.
+  const h1 = { start: 300, end: 302, text: "Because if she wants to gain access to the" };
+  const h2 = { start: 302, end: 304, text: "nuggets, she'll need to first solve the nine" };
+  window.__ctx.ingest({ cues: [h1, h2], lang: "en",
+                        isAsr: false, isNativeTarget: false, key: "human1" });
+  await settle(1400);
+  const humanAt = h1.start + 1;
+  await playAt(humanAt);
+  check("a human track is left in the player's own caption", !nativeHidden(), "");
+  check("…and the translation is injected into it",
+        !!window.__inlineCalled, String(window.__inlineCalled || 0));
+  check("…one authored cue in, one translated cue out",
+        window.__lastInline.length === 1
+        && window.__lastInline[0] === "<Because if she wants to gain access to the>",
+        JSON.stringify(window.__lastInline));
+  await playAt(h2.start + 1);
+  check("…and it changes exactly when the player's line does",
+        window.__lastInline.length === 1
+        && window.__lastInline[0] === "<nuggets, she'll need to first solve the nine>",
+        JSON.stringify(window.__lastInline));
+
+  // The player rebuilds its caption window every time the control bar appears
+  // or goes away, taking our injected line with it. Waiting for the next
+  // animation frame to put it back leaves a painted frame with the original up
+  // and the translation missing — a blink on every mouse move. The rebuild has
+  // to be answered from the MutationObserver, which runs before paint.
+  window.__inlineCalled = 0;
+  const host = document.querySelector("#player .caption-window");
+  host.appendChild(document.createElement("span"));   // the player redrawing
+  await Promise.resolve();                            // observers, before paint
+  check("a caption rebuild is answered before the next frame",
+        window.__inlineCalled > 0, String(window.__inlineCalled));
+
+  // And the same for takeover: the player draws a fresh caption element for
+  // every cue, and if it is only hidden on the next animation frame the
+  // original flashes up once per subtitle underneath ours.
+  STORE.ydsSettings.takeoverCaptions = true;
+  fire();
+  await settle(200);
+  await playAt(humanAt);
+  check("takeover hides the player's new caption", nativeHidden(), "");
+  const fresh = document.createElement("span");
+  fresh.className = "caption-visual-line";
+  fresh.textContent = "a line the player just drew";
+  document.querySelector("#player .caption-window").appendChild(fresh);
+  await Promise.resolve();                            // observers, before paint
+  check("…including one it draws a moment later, before it is ever painted",
+        getComputedStyle(fresh).visibility === "hidden",
+        getComputedStyle(fresh).visibility);
+  fresh.remove();
+  STORE.ydsSettings.takeoverCaptions = false;
+  fire();
+  await settle(150);
+
+  // A video that ships its own track in the target language: its cues are
+  // authored on their own timeline and one of them can cover several of our
+  // sentences. The original beside it has to cover the same stretch of time,
+  // or the translation looks like it has doubled.
+  STORE.ydsSettings.takeoverCaptions = true;
+  fire();
+  await settle(150);
+  window.__ctx.ingest({
+    cues: [{ start: 400, end: 408, text: "一条作者自己写的中文字幕" }],
+    lang: "zh-Hans", isAsr: false, isNativeTarget: true, key: "native-zh"
+  });
+  window.__ctx.ingest({
+    cues: [{ start: 400, end: 403, text: "The first English sentence." },
+           { start: 403, end: 408, text: "And the second one." }],
+    // Not asr: a human source was ingested earlier in this harness, and the
+    // pipeline deliberately refuses to fall back from one to a machine one.
+    lang: "en", isAsr: false, isNativeTarget: false, key: "en-under-native"
+  });
+  await settle(1200);
+  await playAt(401);
+  check("a native target cue is paired with all the source it covers",
+        shown(".yds-text") === "一条作者自己写的中文字幕"
+        && shown(".yds-source").includes("The first English sentence.")
+        && shown(".yds-source").includes("And the second one."),
+        JSON.stringify([shown(".yds-source"), shown(".yds-text")]));
+  STORE.ydsSettings.takeoverCaptions = false;
+  fire();
+  await settle(150);
+
+  // Highest-priority regression: clearing Enable must synchronously clear both
+  // of our lines and restore the native caption, regardless of subtitle mode.
+  STORE.ydsSettings.enabled = false;
+  fire();
+  await settle(80);
+  check("disabling clears both plugin subtitle lines",
+        shown(".yds-source") === "" && shown(".yds-text") === "",
+        JSON.stringify([shown(".yds-source"), shown(".yds-text")]));
+  check("disabling restores the player's caption", !nativeHidden(), "");
+  check("disabling hides the plugin overlay", overlay().style.display === "none",
+        overlay().style.display);
+
+  // Reloading an unpacked extension leaves the already-injected copy running
+  // with its runtime connection cut: the popup cannot reach it, settings
+  // changes never arrive, and it keeps painting. Switching the extension off
+  // then looks like it does nothing. chrome.runtime.id going undefined is the
+  // signal, and the orphan has to clear up rather than haunt the page.
+  await playAt(c1.start + 1);
+  check("before the reload it is drawing", !!overlay() && overlay().isConnected, "");
+  delete window.chrome.runtime.id;
+  await settle(400);
+  check("an orphaned copy removes its own subtitle", !document.querySelector("#yt-dual-sub-overlay"), "");
+  check("…and gives the player its caption back", !nativeHidden(), "");
+
+  const pass = results.filter(r => r.p).length;
+  document.getElementById("out").textContent =
+    results.map(r => `${r.p ? "PASS" : "FAIL"}  ${r.n}${r.d ? "   [" + r.d + "]" : ""}`).join("\n")
+    + `\n\n${pass}/${results.length} passed`;
+})();
+</script>

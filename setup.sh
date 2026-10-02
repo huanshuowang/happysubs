@@ -32,6 +32,8 @@ else
   cd "$STANDALONE_DIR"
   curl -fsSL --retry 3 -o server.py "$RAW/server/server.py"
   curl -fsSL --retry 3 -o requirements.txt "$RAW/server/requirements.txt"
+  curl -fsSL --retry 3 -o start.sh "$RAW/server/start.sh"
+  chmod +x start.sh
 fi
 
 INSTALL_DIR="$(pwd)"
@@ -57,9 +59,12 @@ else
   rm -rf model/test_wavs
 fi
 
+chmod +x start.sh 2>/dev/null || true
+
 echo
-echo "==> 完成。启动识别服务:"
+echo "==> 安装完成。以后每次要用听译,只跑这一条(记下来):"
 echo
-echo "    cd \"${INSTALL_DIR}\" && .venv/bin/python server.py"
+echo "    ${INSTALL_DIR}/start.sh"
 echo
+echo "    它会自己切到正确的目录,在任何地方运行都行,不用先 cd。"
 echo "    看到「监听 ws://127.0.0.1:8765」后,在插件弹窗切到「实时听译」点开启。"

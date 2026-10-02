@@ -1,0 +1,290 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>YDS cue line-splitting harness</title>
+<link rel="stylesheet" href="../overlay.css">
+<style>
+  body { font: 14px/1.5 -apple-system, sans-serif; margin: 16px; }
+  pre { background: #f4f4f4; padding: 10px; white-space: pre-wrap; }
+  #player { position: relative; width: 640px; height: 360px; background: #444; }
+</style>
+
+<h1>Does a line break inside one cue survive translation — when it should?</h1>
+<pre id="out">running…</pre>
+<div id="player"><video id="v"></video></div>
+
+<script>
+// A stand-in translator. It answers in the dict-chrome-ex shape, one row per
+// q=, and records every batch — which is how the test can tell whether a cue
+// went over as one string or as its separate lines.
+window.__batches = [];
+const realFetch = window.fetch.bind(window);
+window.fetch = async (url, opts) => {
+  const u = String(url && url.url ? url.url : url);
+  if (u.includes("clients5.google.com") || u.includes("translate.googleapis.com")) {
+    const qs = new URL(u).searchParams.getAll("q");
+    window.__batches.push(qs.slice());
+    const rows = qs.map(q => ["<" + q + ">", "en"]);
+    return new Response(JSON.stringify(rows), { status: 200, headers: { "content-type": "application/json" } });
+  }
+  return realFetch(url, opts);
+};
+
+const STORE = { ydsSettings: {
+  enabled: true, secondLang: "zh-Hans", uiLang: "auto", bottomOffset: 20,
+  fontSize: 22, color: "#fff", background: "rgba(0,0,0,0.6)",
+  translationProvider: "google", captionWidth: 60, subtitleMode: "inline",
+  translationOnly: false, paidApiAskEachVideo: false, apiKeys: {}
+} };
+const messageHandlers = [];
+window.chrome = {
+  runtime: { id: "yds-test", getURL: (f) => "/" + f, onMessage: { addListener: (fn) => messageHandlers.push(fn) }, lastError: null },
+  i18n: { getUILanguage: () => "zh-CN" },
+  storage: { sync: { get: (k, cb) => setTimeout(() => cb(JSON.parse(JSON.stringify(STORE))), 0),
+                     set: (o, cb) => { Object.assign(STORE, o); cb && cb(); } },
+             onChanged: { addListener() {} } }
+};
+window.AudioContext = class { constructor(){ this.destination={}; } resume(){return Promise.resolve();}
+  close(){return Promise.resolve();} createMediaStreamSource(){return{connect(){},disconnect(){}};}
+  createScriptProcessor(){return{connect(){},disconnect(){},onaudioprocess:null};}
+  createGain(){return{gain:{value:1},connect(){},disconnect(){}};} };
+HTMLMediaElement.prototype.captureStream = function(){ return {}; };
+
+// Ask the content script something the way the popup would.
+window.__send = (msg) => new Promise(resolve => {
+  let answered = false;
+  for (const fn of messageHandlers) {
+    const kept = fn(msg, {}, (r) => { answered = true; resolve(r); });
+    if (kept === true) return;
+  }
+  if (!answered) resolve(null);
+});
+</script>
+<script src="../i18n.js"></script>
+<script src="../platform.js"></script>
+<script src="../live.js"></script>
+<script>
+// The mock records what the inline renderer was handed. Turning those lines
+// into DOM is YouTube's job and is covered by inline-caption.html; what matters
+// here is how many lines arrive and what is in them.
+window.__inline = null;
+// The page saves the file itself (a popup's blob URL dies with the popup), so
+// the only way to see what was exported is to catch the download on its way
+// out. Without this every run of this harness drops three .srt files in the
+// real Downloads folder.
+window.__saved = [];
+const realCreateObjectURL = URL.createObjectURL.bind(URL);
+const savedBlobs = new Map();
+URL.createObjectURL = (blob) => {
+  const url = realCreateObjectURL(blob);
+  savedBlobs.set(url, blob);
+  return url;
+};
+HTMLAnchorElement.prototype.click = function () {
+  if (!this.download) return;
+  window.__saved.push({ name: this.download, blob: savedBlobs.get(this.href) || null });
+};
+window.__lastSaved = async () => {
+  const last = window.__saved[window.__saved.length - 1];
+  return last ? { name: last.name, text: last.blob ? await last.blob.text() : "" } : null;
+};
+
+window.__ctx = null;
+window.YDS_PLATFORMS = {
+  detect: () => "mock",
+  create: (id, ctx) => {
+    window.__ctx = ctx;
+    return {
+      id: "mock", requiresCcForTracks: false,
+      looksLikeVideoPage: () => true,
+      getVideoId: () => "v1",
+      videoTitle: () => "Case Interview Fundamentals: Lesson 10 / Brainstorming",
+      videoAuthor: () => "CaseCoach",
+      getVideoEl: () => document.getElementById("v"),
+      getContainer: () => document.getElementById("player"),
+      isCcOn: () => true,
+      nativeLines: () => [], nativeCaptionWidth: () => 0, nativeCaptionBox: () => null,
+      renderInline: (lines) => { window.__inline = lines.slice(); return true; },
+      clearInline: () => { window.__inline = null; },
+      observeTarget: () => document.getElementById("player"),
+      start() {}, requestTrack() {}, forgetLoadedCues() {}, reset() {}
+    };
+  }
+};
+window.requestAnimationFrame = (fn) => setTimeout(() => fn(performance.now()), 16);
+</script>
+<script src="../content.js"></script>
+<script>
+const results = [];
+const check = (n, p, d) => results.push({ n, p: !!p, d });
+const settle = (ms) => new Promise(r => setTimeout(r, ms));
+
+let at = 0;
+function cueAt(text) {
+  const start = at; at += 10;
+  return { start, end: start + 9, text };
+}
+
+async function playAt(t) {
+  Object.defineProperty(document.getElementById("v"), "currentTime",
+    { get: () => t, configurable: true });
+  await settle(260);
+}
+
+(async () => {
+  await settle(700);
+
+  // Two speakers, one cue. The first line closes on a full stop, so these are
+  // separate utterances and must stay on separate lines.
+  const twoSpeakers = cueAt("So overall, good for us.\nYeah.");
+  // One sentence broken for width. The first line ends on a comma, so the two
+  // halves belong together and must be translated as one string.
+  const wrapped     = cueAt("Well, folks,\nif you want to see...");
+  // Three speakers in a row.
+  const three       = cueAt("Ready?\nYes.\nLet's go.");
+  // A dash is how a cut-off utterance ends, and it ends one.
+  const dashed      = cueAt("We've got so many Shinkansens.\nWe just— We're good.");
+  // No break at all: the ordinary case, one string as before.
+  const plain       = cueAt("Nothing special here.");
+
+  window.__ctx.ingest({
+    cues: [twoSpeakers, wrapped, three, dashed, plain],
+    lang: "en", isAsr: false, isNativeTarget: false, key: "t1"
+  });
+  await settle(1500);
+
+  const sent = window.__batches.flat();
+  check("something was translated", window.__batches.length > 0,
+        JSON.stringify(window.__batches.length));
+
+  // --- what went over the wire ---
+  check("a two-speaker cue is sent as two separate strings",
+        sent.includes("So overall, good for us.") && sent.includes("Yeah."),
+        JSON.stringify(sent.filter(q => /good for us|Yeah/.test(q))));
+  check("a wrapped sentence is sent as one string, not two halves",
+        sent.includes("Well, folks, if you want to see...")
+        && !sent.includes("Well, folks,"),
+        JSON.stringify(sent.filter(q => /folks/.test(q))));
+  check("three speakers become three strings",
+        ["Ready?", "Yes.", "Let's go."].every(q => sent.includes(q)),
+        JSON.stringify(sent.filter(q => /Ready|Yes|Let/.test(q))));
+  check("a cut-off line ending in a dash still counts as finished",
+        sent.includes("We've got so many Shinkansens.") && sent.includes("We just— We're good."),
+        JSON.stringify(sent.filter(q => /Shinkansens|We just/.test(q))));
+  check("a cue with no break is untouched",
+        sent.includes("Nothing special here."), "");
+
+  // --- what comes back out ---
+  await playAt(twoSpeakers.start + 1);
+  check("two speakers render as two lines",
+        Array.isArray(window.__inline) && window.__inline.length === 2,
+        JSON.stringify(window.__inline));
+  // The trailing stop is gone because stripUnwantedPunctuation takes it off
+  // every translated line — existing behaviour, and not what is under test.
+  check("…in the right order, each translated on its own",
+        JSON.stringify(window.__inline) ===
+          JSON.stringify(["<So overall, good for us>", "<Yeah>"]),
+        JSON.stringify(window.__inline));
+
+  await playAt(wrapped.start + 1);
+  check("a wrapped sentence renders as one line",
+        Array.isArray(window.__inline) && window.__inline.length === 1,
+        JSON.stringify(window.__inline));
+  check("…translated whole, as one string with the halves joined",
+        JSON.stringify(window.__inline) ===
+          JSON.stringify(["<Well, folks, if you want to see>"]),
+        JSON.stringify(window.__inline));
+
+  await playAt(three.start + 1);
+  check("three speakers render as three lines",
+        Array.isArray(window.__inline) && window.__inline.length === 3,
+        JSON.stringify(window.__inline));
+
+  await playAt(dashed.start + 1);
+  check("the dashed pair renders as two lines",
+        Array.isArray(window.__inline) && window.__inline.length === 2,
+        JSON.stringify(window.__inline));
+
+  await playAt(plain.start + 1);
+  check("an ordinary cue still renders as one line",
+        Array.isArray(window.__inline) && window.__inline.length === 1,
+        JSON.stringify(window.__inline));
+
+  // --- exporting what was translated ---
+  // The timestamps are the part worth pinning down: SRT wants a comma before
+  // the milliseconds and every field zero-padded, and a reader that sees a full
+  // stop there silently drops the cue.
+  const srt = await window.__send({ type: "YDS_GET_SRT", kind: "bilingual" });
+  // The reply says what happened; the file itself was saved by the page, and
+  // the stub above caught it on the way to the downloads folder.
+  const saved = await window.__lastSaved();
+  check("an SRT was saved", !!(srt && srt.ok && saved && saved.text),
+        JSON.stringify([srt && srt.ok, saved && saved.name]));
+  check("the filename is title-channel-id-languages",
+        saved.name === "Case Interview Fundamentals Lesson 10 Brainstorming-CaseCoach-v1-CN+EN.srt",
+        JSON.stringify(saved.name));
+  const firstBlock = (saved.text || "").split("\n\n")[0].split("\n");
+  check("numbered from 1", firstBlock[0] === "1", JSON.stringify(firstBlock[0]));
+  check("hh:mm:ss,mmm --> hh:mm:ss,mmm",
+        /^\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}$/.test(firstBlock[1] || ""),
+        JSON.stringify(firstBlock[1]));
+  // This cue is two speakers, so it carries two authored lines — the block is
+  // the original's lines followed by the translation's, not one line each.
+  const body = firstBlock.slice(2);
+  const firstTranslated = body.findIndex(l => /^</.test(l));
+  check("bilingual keeps every original line, above every translated one",
+        body.slice(0, firstTranslated).join("\n") === "So overall, good for us.\nYeah."
+        && firstTranslated > 0 && body.slice(firstTranslated).every(l => /^</.test(l)),
+        JSON.stringify(body));
+  check("every cue made it", (saved.text.match(/-->/g) || []).length === 5,
+        String((saved.text.match(/-->/g) || []).length));
+  check("it says where the content came from", srt.from === "translated", srt.from);
+  check("the reply names the file the page saved",
+        srt.filename === saved.name, JSON.stringify([srt.filename, saved.name]));
+
+  await window.__send({ type: "YDS_GET_SRT", kind: "translation" });
+  const onlyTrans = await window.__lastSaved();
+  check("translation-only leaves the original out",
+        !/So overall, good for us\./.test(onlyTrans.text) && /</.test(onlyTrans.text), "");
+  check("…and says so in the filename", /-CN\.srt$/.test(onlyTrans.name),
+        JSON.stringify(onlyTrans.name));
+  await window.__send({ type: "YDS_GET_SRT", kind: "original" });
+  const onlyOrig = await window.__lastSaved();
+  check("original-only leaves the translation out",
+        /So overall, good for us\./.test(onlyOrig.text) && !/<So overall/.test(onlyOrig.text), "");
+  check("…and says so in the filename", /-EN\.srt$/.test(onlyOrig.name),
+        JSON.stringify(onlyOrig.name));
+
+  // --- a video that ships its own track in the target language ---
+  // Nothing is translated then, so the export used to have no original in it
+  // at all: asking for both languages quietly saved a Chinese-only file. The
+  // two tracks are authored separately and their cue boundaries do not line
+  // up, so they are paired by the time they share.
+  window.__ctx.ingest({
+    cues: [{ start: 0, end: 3, text: "这些香喷喷的鸡块" },
+           { start: 3, end: 6, text: "是这一只天才乌鸦的最爱" }],
+    lang: "zh-Hans", isAsr: false, isNativeTarget: true, key: "native-zh"
+  });
+  await settle(900);
+  await window.__send({ type: "YDS_GET_SRT", kind: "bilingual" });
+  const nativePair = await window.__lastSaved();
+  check("a native target track still exports both languages",
+        /这些香喷喷的鸡块/.test(nativePair.text)
+        && /So overall, good for us\./.test(nativePair.text),
+        JSON.stringify(nativePair.text.split("\n\n")[0]));
+  check("…and the original is the source line playing at that moment",
+        nativePair.text.split("\n\n")[0].includes("So overall, good for us."),
+        JSON.stringify(nativePair.text.split("\n\n")[0]));
+
+  // --- the floating overlay is unaffected: it still shows one flat line ---
+  STORE.ydsSettings.subtitleMode = "floating";
+  await settle(50);
+  // Re-read settings the way the extension does.
+  chrome.storage.sync.get(["ydsSettings"], () => {});
+  await settle(100);
+
+  const pass = results.filter(r => r.p).length;
+  document.getElementById("out").textContent =
+    results.map(r => `${r.p ? "PASS" : "FAIL"}  ${r.n}${r.d ? "   [" + r.d + "]" : ""}`).join("\n")
+    + `\n\n${pass}/${results.length} passed`;
+})();
+</script>

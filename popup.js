@@ -4,15 +4,23 @@
 const DEFAULTS = {
   enabled: true,
   secondLang: ydsDefaultSecondLang(),
-  bottomOffset: 22,
-  captionWidth: 60,
-  fontSize: 22,
-  color: "#ffffff",
+  bottomOffset: 5,
+  captionWidth: 80,
+  fontSize: 20,
+  color: "#f7c9c8",
+  unifyStyles: false,
+  sourceColor: "#ffffff",
+  sourceFontSize: 18,
+  // Set once by the page when it moves an old white setting to the new pink,
+  // so that picking white afterwards is respected — see migrateTranslationColor.
+  translationColorMoved: 0,
   background: "rgba(0,0,0,0.6)",
   translationProvider: "google",
   uiLang: "auto",
+  subtitleMode: "inline",
+  takeoverCaptions: true,
   translationOnly: false,
-  paidApiAskEachVideo: false,
+  paidApiMode: "ask",
   apiKeys: {}
 };
 
@@ -31,6 +39,33 @@ const KEY_PLACEHOLDERS = {
   deepseek: "sk-..."
 };
 
+// A shortlist of what each paid provider can be pointed at — not the whole
+// catalogue. Providers ship new models faster than this popup does, so the
+// picker's last entry opens a field for any other model name they accept. The
+// first entry is the default, and it must match DEFAULT_MODELS in content.js —
+// that is the fallback the page uses when this setting was never touched, or
+// was cleared.
+const PROVIDER_MODELS = {
+  claude: [
+    ["claude-haiku-4-5",  "Haiku 4.5"],
+    ["claude-sonnet-5-5", "Sonnet 5.5"],
+    ["claude-opus-5-5",   "Opus 5.5"]
+  ],
+  openai: [
+    ["gpt-6-luna",  "GPT-6 Luna"],
+    ["gpt-6.1-sol", "GPT-6.1 Sol"],
+    ["gpt-6-astra", "GPT-6 Astra"]
+  ],
+  gemini: [
+    ["gemini-3.5-flash-lite", "3.5 Flash-Lite"],
+    ["gemini-3.8-flash",      "3.8 Flash"]
+  ],
+  deepseek: [
+    ["deepseek-flash",  "Flash"],
+    ["deepseek-v4-pro", "V4 Pro"]
+  ]
+};
+
 const PROVIDER_NAMES = {
   google: "Google Translate",
   claude: "Claude",
@@ -45,6 +80,11 @@ function localizeStaticDom() {
   for (const el of document.querySelectorAll("[data-i18n]")) {
     el.textContent = ydsT(el.dataset.i18n);
   }
+  for (const el of document.querySelectorAll("[data-i18n-title]")) {
+    const t = ydsT(el.dataset.i18nTitle);
+    el.title = t;
+    el.setAttribute("aria-label", t);
+  }
   document.title = ydsT("appTitle");
   $("apiKey").placeholder = ydsT("pasteHere");
   $("apiKeyState").title = ydsT("keyStateTitle");
@@ -55,17 +95,27 @@ let activeTabId = null;
 let apiKeySaveTimer = null;
 let statusPollTimer = null;
 let apiKeyEditing = false;
+// The last model picked from the list, so leaving the custom field comes back
+// to it rather than to the provider's default.
+let lastListModel = "";
 
 const $ = (id) => document.getElementById(id);
 
-function bgToAlpha(bg) {
+// The overlay keeps its background as a colour string and only the opacity is
+// editable, so the two are converted at the edge rather than stored twice.
+// The slider is labelled "transparency", so that is what it shows: drag right
+// and the plate gets lighter. What is stored is the opacity, because that is
+// what rgba() wants — the two are opposites, and the slider used to show the
+// opacity under the transparency label, so dragging towards "more transparent"
+// made the subtitle darker.
+function bgToTransparency(bg) {
   const m = /rgba?\([^)]*,\s*([0-9.]+)\s*\)/.exec(bg || "");
-  if (m) return Math.round(parseFloat(m[1]) * 100);
-  return 60;
+  const opacity = m ? parseFloat(m[1]) : 0.6;
+  return Math.round((1 - opacity) * 100);
 }
-function alphaToBg(a) {
-  const v = Math.max(0, Math.min(100, a)) / 100;
-  return `rgba(0,0,0,${v.toFixed(2)})`;
+function transparencyToBg(t) {
+  const opacity = 1 - Math.max(0, Math.min(100, t)) / 100;
+  return `rgba(0,0,0,${opacity.toFixed(2)})`;
 }
 
 const SUPPORTED_URL = /^https?:\/\/(www\.youtube\.com|(player\.)?vimeo\.com|www\.bilibili\.com)\//;
@@ -112,10 +162,31 @@ async function askContent(tabId) {
     try {
       chrome.tabs.sendMessage(tabId, { type: "YDS_GET_INFO" }, (resp) => {
         if (chrome.runtime.lastError) resolve(null);
-        else resolve(resp || null);
+        else { noteVideoInfo(resp); resolve(resp || null); }
       });
     } catch { resolve(null); }
   });
+}
+
+// Every answer from the page passes through here, so the appearance sliders
+// follow the video the popup is actually open over rather than the last one.
+function noteVideoInfo(info) {
+  if (!info) return;
+  let changed = false;
+  if (typeof info.sourceIsAsr === "boolean" && currentIsAsr !== info.sourceIsAsr) {
+    currentIsAsr = info.sourceIsAsr;
+    changed = true;
+  }
+  if (typeof info.drawnInOwnBox === "boolean" && currentOwnBox !== info.drawnInOwnBox) {
+    currentOwnBox = info.drawnInOwnBox;
+    changed = true;
+  }
+  if (typeof info.drawsSourceLine === "boolean" && currentDrawsSource !== info.drawsSourceLine) {
+    currentDrawsSource = info.drawsSourceLine;
+    changed = true;
+  }
+  if (!changed) return;
+  try { applyAppearanceUI(); } catch { /* before the DOM is wired */ }
 }
 
 async function sendContent(tabId, msg) {
@@ -360,11 +431,14 @@ async function saveApiKey(provider, value) {
 function applyProviderUI(settings) {
   const p = $("provider").value;
   const needsKey = p !== "google";
+  fillModelOptions(p, settings);
+  $("modelRow").style.display = needsKey ? "" : "none";
+  $("modelHelp").style.display = needsKey ? "" : "none";
   $("apiKeyRow").style.display = needsKey ? "" : "none";
   $("apiKeyHelp").style.display = needsKey ? "" : "none";
   $("paidControls").style.display = needsKey ? "block" : "none";
   $("askPaidRow").style.display = needsKey ? "flex" : "none";
-  $("askPaidApi").checked = !!settings.paidApiAskEachVideo;
+  $("paidApiMode").value = settings.paidApiMode || "ask";
   $("translationOnly").checked = !!settings.translationOnly;
   if (needsKey) {
     const keys = settings.apiKeys || {};
@@ -398,6 +472,65 @@ function providerName(provider) {
   return PROVIDER_NAMES[provider] || provider || ydsT("providerUnknown");
 }
 
+// The list changes with the provider, so it is rebuilt rather than filtered.
+// A model this shortlist has never heard of — one the viewer typed in — comes
+// back as the custom field holding it, not as a silent snap to the default.
+function fillModelOptions(provider, settings) {
+  const list = PROVIDER_MODELS[provider];
+  const sel = $("model");
+  sel.innerHTML = "";
+  if (!list) { showModelCustom(false); return; }
+  for (const [id, label] of list) {
+    const o = document.createElement("option");
+    o.value = id;
+    o.textContent = label;
+    sel.appendChild(o);
+  }
+  const custom = document.createElement("option");
+  custom.value = CUSTOM_MODEL;
+  custom.textContent = ydsT("modelCustomOption");
+  sel.appendChild(custom);
+
+  const chosen = ((settings && settings.models) || {})[provider] || list[0][0];
+  const known = list.some(([id]) => id === chosen);
+  lastListModel = known ? chosen : list[0][0];
+  sel.value = known ? chosen : CUSTOM_MODEL;
+  $("modelCustom").value = known ? "" : chosen;
+  $("modelCustom").placeholder = list[0][0];
+  showModelCustom(!known);
+}
+
+// The sentinel the picker's last entry carries. It is never stored.
+const CUSTOM_MODEL = "__custom__";
+
+function showModelCustom(on) {
+  $("model").hidden = on;
+  $("modelCustomWrap").hidden = !on;
+}
+
+// The default for a provider, used when the custom field is left empty.
+function defaultModelFor(provider) {
+  const list = PROVIDER_MODELS[provider];
+  return list ? list[0][0] : "";
+}
+
+async function saveModel(provider, model) {
+  const cur = (await chrome.storage.sync.get(["ydsSettings"])).ydsSettings || {};
+  await save({ models: { ...(cur.models || {}), [provider]: model } });
+  $("status").textContent = ydsT("statusProviderSwitched", { name: providerName(provider) });
+  refreshStatusSeries();
+}
+
+// Leaving the custom field empty is how you get back to the list, rather than
+// a way to send the provider an empty model name.
+function backToModelList(provider) {
+  const back = lastListModel || defaultModelFor(provider);
+  $("model").value = back;
+  $("modelCustom").value = "";
+  showModelCustom(false);
+  return saveModel(provider, back);
+}
+
 function statusTextFor(info, tab) {
   if (!tab) return ydsT("statusNoTab");
   if (!info || !info.videoId) return ydsT("statusNoComm", { platform: platformName(info) });
@@ -423,6 +556,14 @@ function statusTextFor(info, tab) {
     const total = st.totalCount || st.cueCount || 0;
     const progress = total ? ydsT("progressFmt", { done, total }) : "";
     return ydsT("statusTranslating", { name: providerName(st.provider), progress });
+  }
+  if (st.mode === "partial") {
+    return ydsT("statusPartial", {
+      name: providerName(st.provider),
+      done: st.translatedCount || 0,
+      missing: st.untranslatedCount || 0,
+      error: st.error ? ydsT("errorPrefix") + st.error : ""
+    });
   }
   if (st.mode === "fallback") {
     if (st.declined || (st.error || "").startsWith("用户取消")) {
@@ -498,6 +639,112 @@ function startStatusPolling() {
 
 const SETUP_URL = "https://huanshuowang.com/happysubs/#live";
 
+// The gear doubles as the way back: there is nowhere else to put a back
+// button in a popup this narrow, and one control for one toggle is clearer
+// than two that look alike.
+// Whether live transcription is running right now. It decides, along with the
+// subtitle style, whether the appearance sliders have anything to act on.
+let liveRunning = false;
+// Whether the video behind the popup is running on an auto-generated track.
+// Null until the page has answered — treated as "not auto" so the sliders do
+// not flash into view and back out again while the answer is on its way.
+let currentIsAsr = false;
+// What the PAGE says about this video: is our own subtitle box what is drawing,
+// or is the translation going inside the player's caption? Null until it
+// answers. Guessing this from the track kind was wrong often enough to matter —
+// a video with only a target-language track has no source cues, so takeover
+// cannot engage and the translation is injected whatever the switches say.
+let currentOwnBox = null;
+// …and whether the ORIGINAL is one of the lines it draws. "Translation only"
+// draws one language, so the original's rows would be settings for something
+// that is not on screen.
+let currentDrawsSource = null;
+
+// The sliders style our own subtitle box, so they are shown exactly when that
+// box is what the viewer is looking at:
+//
+//   "separate layer"  — always; the box is how every subtitle is drawn.
+//   "part of the player's subtitle" — only while live transcription runs.
+//     A recogniser is used precisely because the player has no captions, so
+//     there is nothing to become part of and live always falls back to the box.
+//     That is easy to miss, and it is why hiding these on the style alone left
+//     no way to resize live captions.
+function applyAppearanceUI() {
+  const inline = $("subtitleMode").value === "inline";
+  // The sliders style our own box, so they are shown exactly when that box is
+  // what is drawing this video. In inline mode that is: live transcription
+  // (there is no player caption to join), an auto-generated track (its rolling
+  // line is not the sentence we translate, so the translation goes in the box),
+  // and takeover. What is left — a video with its own written captions — has
+  // the translation injected into the player's caption, where the font, the
+  // size and the colour are the player's and these sliders would do nothing.
+  // The page's own answer wins. These sliders style our box, and only the page
+  // knows whether that box is what is on screen — on a video that carries a
+  // target-language track but no source cues, nothing can take the caption
+  // over, so the translation is injected into the player's and none of this
+  // applies however the switches are set. Guessing led to a panel full of
+  // controls that quietly did nothing.
+  const ownBox = currentOwnBox !== null
+    ? (currentOwnBox || liveRunning)
+    : (!inline || liveRunning || currentIsAsr || $("takeoverCaptions").checked);
+  $("appearanceControls").hidden = !ownBox;
+  $("appearanceNote").hidden = ownBox;
+  applyStyleSplitUI();
+  // Drawing both languages ourselves is a choice only inside inline mode:
+  // "separate layer" already leaves the player's original alone by definition.
+  $("takeoverRow").hidden = !inline;
+  $("takeoverNote").hidden = !inline;
+  // Off, the note says what the switch would do; on, it says what is happening.
+  // A note that still explains the choice after it has been made reads as if
+  // nothing took effect.
+  $("takeoverNote").textContent =
+    ydsT($("takeoverCaptions").checked ? "takeoverNoteOn" : "takeoverNote");
+}
+
+// One set of size/colour, or one per language. The original's rows only exist
+// when they can differ; the headings only appear then too, because with a
+// single set there is nothing for them to tell apart.
+// These two settings change WHICH renderer draws, and the panel now takes that
+// answer from the page. Without re-asking, it keeps showing the answer from
+// before the change — picking "translation only" left the appearance section
+// empty, still reporting that the translation was going inside the player's
+// caption. The page needs a moment to apply the setting first.
+let rendererRefreshTimer = null;
+function refreshRendererSoon(ms = 260) {
+  clearTimeout(rendererRefreshTimer);
+  rendererRefreshTimer = setTimeout(async () => {
+    if (activeTabId) await askContent(activeTabId);   // noteVideoInfo does the rest
+  }, ms);
+}
+
+function applyStyleSplitUI() {
+  // Does the original appear in our box at all? In "translation only" it does
+  // not, so there is nothing for its size and colour to change — and with one
+  // language on screen there is nothing to unify either, which leaves the
+  // translation's own rows standing alone without headings.
+  const drawsSource = currentDrawsSource !== null
+    ? currentDrawsSource
+    : $("subtitleMode").value === "inline";
+  const split = drawsSource && !$("unifyStyles").checked;
+  $("unifyStylesRow").hidden = !drawsSource;
+  for (const id of ["sourceStyleHead", "sourceFontRow", "sourceColorRow", "targetStyleHead"]) {
+    $(id).hidden = !split;
+  }
+}
+
+function showSettings(on) {
+  $("settingsView").hidden = !on;
+  $("mainView").hidden = on;
+  // The status line reports on the video behind the popup, which settings has
+  // nothing to do with.
+  $("status").hidden = on;
+  const gear = $("openSettings");
+  gear.textContent = on ? "\u2190" : "\u2699";
+  const label = ydsT(on ? "back" : "openSettings");
+  gear.title = label;
+  gear.setAttribute("aria-label", label);
+}
+
 function selectTab(which) {
   const live = which === "live";
   $("tabLive").setAttribute("aria-selected", String(live));
@@ -512,6 +759,10 @@ function selectTab(which) {
 // link attached whenever the answer is "the recogniser isn't there".
 function renderLivePanel(info) {
   const st = (info && info.live) || { active: false, status: "stopped" };
+  if (liveRunning !== !!st.active) {
+    liveRunning = !!st.active;
+    applyAppearanceUI();
+  }
   const running = !!st.active;
   $("liveToggle").textContent = ydsT(running ? "liveStop" : "liveStart");
 
@@ -576,15 +827,24 @@ async function init() {
   localizeStaticDom();
 
   $("enabled").checked = !!settings.enabled;
+  $("uiLang").value = settings.uiLang || "auto";
+  $("subtitleMode").value = settings.subtitleMode || "inline";
+  $("takeoverCaptions").checked = !!settings.takeoverCaptions;
   $("bottomOffset").value = settings.bottomOffset;
   $("bottomOffsetVal").textContent = `${settings.bottomOffset}%`;
   $("captionWidth").value = settings.captionWidth;
   $("captionWidthVal").textContent = `${settings.captionWidth}%`;
   $("fontSize").value = settings.fontSize;
   $("color").value = settings.color;
-  $("bgAlpha").value = bgToAlpha(settings.background);
+  $("unifyStyles").checked = !!settings.unifyStyles;
+  $("sourceColor").value = settings.sourceColor || "#ffffff";
+  $("sourceFontSize").value = settings.sourceFontSize;
+  applyStyleSplitUI();
+  $("bgAlpha").value = bgToTransparency(settings.background);
+  $("bgAlphaVal").textContent = `${bgToTransparency(settings.background)}%`;
+  applyAppearanceUI();
   $("provider").value = settings.translationProvider || "google";
-  $("askPaidApi").checked = !!settings.paidApiAskEachVideo;
+  $("paidApiMode").value = settings.paidApiMode || "ask";
   applyProviderUI(settings);
 
   const tab = await getActiveSupportedTab();
@@ -625,6 +885,75 @@ async function init() {
     refreshStatusSeries();
     startStatusPolling();
   });
+  // Settings are a second view of this popup, not a separate page: everything
+  // here changes what is on screen behind it, and a tab would hide the video.
+  $("openSettings").addEventListener("click", () => showSettings($("settingsView").hidden));
+
+  // The page does the saving, not this popup: a blob URL dies with the document
+  // that created it, and a popup is destroyed as soon as it loses focus — which
+  // is what clicking a download link causes. chrome.downloads would avoid that
+  // too, but it is a permission in the install prompt for one button.
+  $("downloadSrt").addEventListener("click", async () => {
+    const tab = await getActiveSupportedTab();
+    if (!tab) { $("status").textContent = ydsT("statusNoTab"); return; }
+    const kind = $("srtKind").value;
+    const res = await new Promise((resolve) => {
+      chrome.tabs.sendMessage(tab.id, { type: "YDS_GET_SRT", kind }, (r) => {
+        if (chrome.runtime.lastError) resolve(null); else resolve(r);
+      });
+    });
+    if (!res || !res.ok) { $("status").textContent = ydsT("srtEmpty"); return; }
+    $("status").textContent = ydsT(res.from === "live" ? "srtSavedLive" : "srtSaved",
+                                   { n: res.cueCount });
+  });
+
+  $("uiLang").addEventListener("change", async (e) => {
+    const value = e.target.value;
+    await save({ uiLang: value });
+    ydsSetUiLang(value);
+    localizeStaticDom();
+    // Re-rendering the static text wipes the gear's own state back to its
+    // default glyph, and puts the takeover note back to its "off" wording, so
+    // both are restored here.
+    showSettings(!$("settingsView").hidden);
+    applyAppearanceUI();
+  });
+
+  $("subtitleMode").addEventListener("change", (e) => {
+    save({ subtitleMode: e.target.value });
+    applyAppearanceUI();
+    refreshRendererSoon();
+  });
+  // Back to how it looked out of the box. Appearance only — the language, the
+  // translator and the API keys are not "appearance" and losing them to a
+  // button in this section would be a nasty surprise.
+  $("resetAppearance").addEventListener("click", async () => {
+    const fields = ["bottomOffset", "captionWidth", "fontSize", "color", "background",
+                    "unifyStyles", "sourceColor", "sourceFontSize"];
+    const fresh = {};
+    for (const k of fields) fresh[k] = DEFAULTS[k];
+    await save(fresh);
+    $("bottomOffset").value = fresh.bottomOffset;
+    $("bottomOffsetVal").textContent = `${fresh.bottomOffset}%`;
+    $("captionWidth").value = fresh.captionWidth;
+    $("captionWidthVal").textContent = `${fresh.captionWidth}%`;
+    $("fontSize").value = fresh.fontSize;
+    $("color").value = fresh.color;
+    $("bgAlpha").value = bgToTransparency(fresh.background);
+    $("bgAlphaVal").textContent = `${bgToTransparency(fresh.background)}%`;
+    $("unifyStyles").checked = !!fresh.unifyStyles;
+    $("sourceColor").value = fresh.sourceColor;
+    $("sourceFontSize").value = fresh.sourceFontSize;
+    applyStyleSplitUI();
+  });
+
+  $("takeoverCaptions").addEventListener("change", (e) => {
+    save({ takeoverCaptions: e.target.checked });
+    refreshRendererSoon();
+    // Turning this on means we draw the box, so the appearance sliders start
+    // applying — they have to appear with it, not on the next popup open.
+    applyAppearanceUI();
+  });
   $("captionWidth").addEventListener("input", (e) => {
     const v = Number(e.target.value);
     $("captionWidthVal").textContent = `${v}%`;
@@ -635,9 +964,54 @@ async function init() {
     $("bottomOffsetVal").textContent = `${v}%`;
     save({ bottomOffset: v });
   });
-  $("fontSize").addEventListener("change", (e) => save({ fontSize: parseInt(e.target.value, 10) || 22 }));
+  // "input", not "change": a number field only fires change on blur, and
+  // closing the popup destroys the document without ever blurring it — so a
+  // size typed and then dismissed was silently thrown away. The sliders have
+  // always used input; these two were the odd ones out.
+  $("fontSize").addEventListener("input",
+    (e) => save({ fontSize: parseInt(e.target.value, 10) || DEFAULTS.fontSize }));
   $("color").addEventListener("change", (e) => save({ color: e.target.value }));
-  $("bgAlpha").addEventListener("input", (e) => save({ background: alphaToBg(parseInt(e.target.value, 10)) }));
+  $("sourceFontSize").addEventListener("input",
+    (e) => save({ sourceFontSize: parseInt(e.target.value, 10) || DEFAULTS.sourceFontSize }));
+  $("sourceColor").addEventListener("change", (e) => save({ sourceColor: e.target.value }));
+  $("unifyStyles").addEventListener("change", (e) => {
+    save({ unifyStyles: e.target.checked });
+    applyStyleSplitUI();
+  });
+  $("bgAlpha").addEventListener("input", (e) => {
+    const v = parseInt(e.target.value, 10) || 0;
+    $("bgAlphaVal").textContent = `${v}%`;
+    save({ background: transparencyToBg(v) });
+  });
+
+  $("model").addEventListener("change", async (e) => {
+    const provider = $("provider").value;
+    // Nothing is stored for the sentinel itself — the field below it decides.
+    if (e.target.value === CUSTOM_MODEL) {
+      showModelCustom(true);
+      $("modelCustom").value = "";
+      $("modelCustom").focus();
+      return;
+    }
+    lastListModel = e.target.value;
+    await saveModel(provider, e.target.value);
+  });
+
+  $("modelCustom").addEventListener("change", async (e) => {
+    const provider = $("provider").value;
+    const typed = (e.target.value || "").trim();
+    if (!typed) return backToModelList(provider);
+    e.target.value = typed;
+    await saveModel(provider, typed);
+  });
+  // Picking "custom" and then clicking away without typing leaves no change
+  // event behind, so the empty field is caught on the way out too.
+  $("modelCustom").addEventListener("blur", () => {
+    if (!$("modelCustomWrap").hidden && !$("modelCustom").value.trim()) {
+      backToModelList($("provider").value);
+    }
+  });
+  $("modelUseList").addEventListener("click", () => backToModelList($("provider").value));
 
   $("provider").addEventListener("change", async (e) => {
     await save({ translationProvider: e.target.value });
@@ -647,13 +1021,24 @@ async function init() {
     refreshStatusSeries();
     startStatusPolling();
   });
-  $("askPaidApi").addEventListener("change", async (e) => {
-    await save({ paidApiAskEachVideo: e.target.checked });
-    $("status").textContent = e.target.checked ? ydsT("askOn") : ydsT("askOff");
+  $("paidApiMode").addEventListener("change", async (e) => {
+    await save({ paidApiMode: e.target.value });
+    $("status").textContent = ydsT(
+      e.target.value === "always" ? "paidPolicyOnAlways"
+      : e.target.value === "manual" ? "paidPolicyOnManual"
+      : "paidPolicyOnAsk");
   });
   $("usePaidApi").addEventListener("click", async () => {
     if (!activeTabId) return;
     const provider = $("provider").value;
+    // The key field saves on a debounce. Pasting a key and pressing this
+    // straight away used to send the request before the key was stored, and the
+    // page answered "API key not set" — the button appeared to do nothing.
+    if (apiKeySaveTimer) {
+      clearTimeout(apiKeySaveTimer);
+      apiKeySaveTimer = null;
+      await saveApiKey(provider, $("apiKey").value.trim());
+    }
     $("status").textContent = ydsT("statusStartingPaid", { name: providerName(provider) });
     const resp = await sendContent(activeTabId, { type: "YDS_APPROVE_PAID_API" });
     if (!resp?.ok) {

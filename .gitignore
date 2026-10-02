@@ -25,3 +25,9 @@ dist/
 # binaries and the model is ~300MB from the sherpa-onnx project's releases.
 server/.venv/
 server/model/
+
+# My own paperwork: the release checklist and the crib sheet for the Chrome Web
+# Store form. Chore lists for one person, not documentation anyone cloning the
+# repo needs — and the store copy changes on its own schedule anyway.
+RELEASE.md
+STORE-SUBMISSION.md

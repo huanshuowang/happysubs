@@ -37,7 +37,7 @@ const STORE = { ydsSettings: { enabled: true, secondLang: "en", bottomOffset: 20
                                translationProvider: "google", apiKeys: {} } };
 window.__writes = [];
 window.chrome = {
-  runtime: { getURL: (f) => "/" + f, onMessage: { addListener() {} }, lastError: null },
+  runtime: { id: "yds-test", getURL: (f) => "/" + f, onMessage: { addListener() {} }, lastError: null },
   storage: {
     sync: {
       get: (k, cb) => setTimeout(() => cb(JSON.parse(JSON.stringify(STORE))), 0),
@@ -94,6 +94,8 @@ document.addEventListener("click", () => window.__targetClicks++, true);
 function readout() {
   const o = document.querySelector("#yt-dual-sub-overlay");
   const h = o && o.querySelector(".yds-drag-handle");
+  const playerRect = document.getElementById("fake-player").getBoundingClientRect();
+  const overlayRect = o && o.getBoundingClientRect();
   return {
     overlay: !!o,
     bottom: o ? o.style.bottom : null,
@@ -104,6 +106,9 @@ function readout() {
     maxWidth: o ? o.style.maxWidth : null,
     nativeWidth: Math.round(document.getElementById("native-cap").getBoundingClientRect().width),
     overlayWidth: o ? Math.round(o.getBoundingClientRect().width) : null,
+    overlayTop: overlayRect ? Math.round(overlayRect.top) : null,
+    playerTop: Math.round(playerRect.top),
+    topInBounds: overlayRect ? overlayRect.top >= playerRect.top - 1 : null,
     targetClicks: window.__targetClicks,
     writes: window.__writes.length
   };

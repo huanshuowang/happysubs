@@ -21,7 +21,7 @@
 <script>
   // Minimal chrome stub — the adapter only uses runtime.getURL for the
   // page-world script, which we let 404 harmlessly.
-  window.chrome = { runtime: { getURL: (f) => "/" + f } };
+  window.chrome = { runtime: { id: "yds-test", getURL: (f) => "/" + f } };
 </script>
 <script src="../platform.js"></script>
 <script>

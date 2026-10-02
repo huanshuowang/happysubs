@@ -54,7 +54,7 @@ const STORE = { ydsSettings: { enabled: true, secondLang: "zh-Hans", uiLang: "au
                                background: "rgba(0,0,0,0.6)", translationProvider: "google",
                                translationOnly: true, apiKeys: {} } };
 window.chrome = {
-  runtime: { getURL: (f) => "/" + f, onMessage: { addListener() {} }, lastError: null },
+  runtime: { id: "yds-test", getURL: (f) => "/" + f, onMessage: { addListener() {} }, lastError: null },
   i18n: { getUILanguage: () => "en-US" },
   storage: { sync: { get: (k, cb) => setTimeout(() => cb(JSON.parse(JSON.stringify(STORE))), 0),
                      set: (o, cb) => { Object.assign(STORE, o); cb && cb(); } },

@@ -2,14 +2,22 @@
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  max-width: 96%;
+  max-width: 65%;
   padding: 4px 12px;
-  border-radius: 4px;
+  /* Our own look, deliberately not the player's. This used to copy YouTube
+     (square corners, no shadow) so the translation would read as the second
+     half of one subtitle — but the translation is ours, and telling the two
+     apart at a glance turned out to matter more than blending in. Rounded
+     plates and a shadow, set on the rows themselves further down.
+
+     The line-height is what the plates are built around: each wrapped row's
+     background is sized by the font metrics plus its padding, not by this, so
+     the two have to agree or the rows either gap or overlap. */
+  border-radius: 0;
   text-align: center;
-  line-height: 1.3;
+  line-height: 1.34;
   font-family: "YouTube Sans", "Roboto", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   font-weight: 600;
-  text-shadow: 0 0 3px rgba(0, 0, 0, 0.95), 0 0 2px rgba(0, 0, 0, 0.95);
   pointer-events: none;
   z-index: 999999 !important;
   white-space: pre-wrap;
@@ -25,8 +33,17 @@
    sources leave this line hidden, because the player is already showing the
    original itself. */
 .yds-source {
-  opacity: 0.82;
-  font-size: 0.86em;
+  /* Not dimmed any more. It was at 0.82 so the eye would land on the
+     translation first, but over a bright shot the white went grey and became
+     hard to read — and the original is the line you check what you heard
+     against. The smaller size still says which of the two is secondary. */
+  opacity: 1;
+  /* The original has its own size and colour, set from the panel. The
+     fallbacks here are what it looked like when there was only one of each.
+     They have to stay variables: content.js locks them to the translation's
+     when "one set of settings" is on, which a fixed rule could not do. */
+  font-size: var(--yds-source-size, 0.86em);
+  color: var(--yds-source-color, #ffffff);
 }
 
 /* ---- live transcription layout ----
@@ -39,7 +56,7 @@
    keeps changing shape. */
 .yds-overlay.yds-live {
   width: var(--yds-live-width, 60%);
-  max-width: var(--yds-live-width, 60%);
+  max-width: min(var(--yds-live-width, 60%), 65%);
   padding: 0;
   background: transparent !important;
   opacity: 0;
@@ -61,28 +78,115 @@
   align-items: center;
 }
 
-/* A small, deliberate gap between the two languages — they are separate
-   thoughts, unlike two halves of one wrapped sentence. */
-.yds-overlay.yds-live .yds-clip + .yds-clip { margin-top: 3px; }
-
-/* One box per language, not one per line.
-   Painting the background on each line (box-decoration-break) leaves the
-   leading between them showing through as a stripe of video across the middle
-   of a sentence — a sentence that wrapped should still read as one block. The
-   box is inline-block so it hugs the text rather than filling the player. */
-.yds-overlay.yds-live .yds-wrap {
+/* Live transcription uses one box for both languages.
+   What is being recognised and what it means are one caption; two plates with
+   a strip of video between them read as two separate subtitles. The box is
+   inline-block so it hugs the wider of the two lines rather than filling the
+   viewer's chosen width, and painting it here rather than on each line also
+   keeps the leading inside a wrapped sentence from showing through. Finished
+   subtitle tracks override this below with one compact plate per row. */
+.yds-overlay.yds-pair .yds-live-box {
   display: inline-block;
   text-align: center;
   background: var(--yds-live-bg, rgba(0, 0, 0, 0.65));
   padding: 2px 10px;
-  border-radius: 4px;
   max-width: 100%;
 }
 
-.yds-overlay.yds-live .yds-line {
+.yds-overlay.yds-pair .yds-clip + .yds-clip { margin-top: 0; }
+
+.yds-overlay.yds-pair .yds-wrap {
+  display: block;
+  text-align: center;
+  background: none;
+  padding: 0;
+  max-width: 100%;
+}
+
+.yds-overlay.yds-pair .yds-line {
   display: inline;
   background: none;
   padding: 0;
+}
+
+/* Finished track captions use one compact plate per language. The overlay is a
+   positioning/width boundary only; it must never paint a player-wide grey slab. */
+.yds-overlay:not(.yds-live) {
+  padding: 0;
+  background: transparent !important;
+}
+
+.yds-overlay:not(.yds-live) .yds-live-box {
+  background: transparent;
+  padding: 0;
+}
+
+.yds-overlay:not(.yds-live) .yds-clip {
+  text-align: center;
+  overflow: visible;
+}
+
+/* One sentence wrapped over two rows is one thing and has to look like it, so
+   the rows touch. The gap belongs between the languages instead — that is the
+   break the eye is actually looking for. */
+.yds-overlay:not(.yds-live) .yds-clip + .yds-clip {
+  /* In em so it holds at every font size and in fullscreen. The plates
+     themselves overshoot the text box a little — more so for CJK, whose
+     metrics are taller — so the margin is larger than the gap it produces. */
+  margin-top: 0.27em;
+}
+
+/* The plate is painted on the text itself, not on a block around it.
+ *
+ * It used to sit on this wrapper, as an inline-block clamped to the overlay's
+ * width with the text inside set to nowrap. A line that did not fit — a long
+ * auto-generated sentence — then ran straight out of its own background and off
+ * the side of the video, and because only the original overflowed, the
+ * translation underneath it read as badly off-centre when it was in fact
+ * centred all along.
+ *
+ * Painting the span instead lets a line that does not fit wrap, and
+ * box-decoration-break makes each wrapped row carry its own background, so the
+ * plate keeps hugging the words rather than becoming a rectangle around them. */
+.yds-overlay:not(.yds-live) .yds-wrap {
+  display: block;
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 0;
+  background: none;
+  white-space: normal;
+}
+
+.yds-overlay:not(.yds-live) .yds-line {
+  display: inline;
+  /* Vertical padding is in em and adds up to the leading the line-height above
+     hands out, so consecutive rows of one sentence meet with no stripe of video
+     showing between them. In px it would only line up at one font size. */
+  padding: 0.17em 0.42em;
+  background: var(--yds-caption-bg, rgba(0, 0, 0, 0.65));
+  border-radius: 7px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+/* The depth belongs to the letters, not to the plate.
+ *
+ * The plate had a box-shadow too, which on a solid black block just softened
+ * its edge into the picture and made the block itself look blurred. The plate
+ * is meant to read as a flat card; what needs lifting off it is the text. */
+.yds-overlay:not(.yds-live) .yds-line {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+/* Measured, not guessed: with 0.17em the two rows of one Chinese sentence
+   overlapped by 5px, and with the padding that fixes that the two rows of an
+   English one stood 6px apart. The taller script gets the smaller padding, so
+   both end up just touching. content.js sets these classes from the language
+   each line is actually in. */
+.yds-overlay:not(.yds-live).yds-text-cjk .yds-text,
+.yds-overlay:not(.yds-live).yds-source-cjk .yds-source {
+  padding-top: 0.07em;
+  padding-bottom: 0.07em;
 }
 
 /* The drag handle sits just above the overlay and only becomes visible
@@ -119,6 +223,14 @@
   outline-offset: 2px;
 }
 
+/* Takeover: in inline/follow mode the player's caption is hidden and both
+   languages are drawn here instead. Sized to its content like a subtitle track,
+   not pinned to a share of the player the way a live stream is. */
+.yds-overlay.yds-takeover {
+  padding: 0;
+  background: transparent !important;
+}
+
 /* Set briefly by inject-youtube.js while we ask YouTube's player to swap tracks
    so we can intercept the user's target-language track. Hides YouTube's own
    caption strip so the user doesn't see a flash of the wrong language.
@@ -133,38 +245,114 @@ body.yds-suppressing-native .ytp-caption-window-container {
    where we hang the overlay too. Nothing to override — this just documents that
    the overlay's own z-index has to stay above it. */
 
+/* ---------- translation status toast ----------
+   Top centre of the player, clear of the subtitle at the bottom and of the
+   player's own controls. Pointer events off: it reports, it is never in the
+   way of a click on the video. */
+.yds-toast {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translate(-50%, -6px);
+  z-index: 60;
+  max-width: min(78%, 560px);
+  padding: 8px 15px;
+  border-radius: 999px;
+  font: 600 14px/1.4 "SF Pro Display", -apple-system, BlinkMacSystemFont,
+        "Segoe UI", "PingFang SC", "Hiragino Sans GB", Roboto, sans-serif;
+  letter-spacing: 0.01em;
+  color: #fff;
+  /* Light enough to read the picture through: it is a status line over
+     someone's video, not a dialog. The blur carries the legibility. */
+  background: rgba(20, 16, 17, 0.52);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.30);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.yds-toast-on { opacity: 1; transform: translate(-50%, 0); }
+
+/* A dot carries the state, so the colour is not the only signal. */
+.yds-toast::before {
+  content: "";
+  display: inline-block;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  margin-right: 9px;
+  vertical-align: 1px;
+  background: currentColor;
+}
+.yds-toast-busy { color: #ffd9df; }
+.yds-toast-busy::before { background: #ff4d6d; animation: yds-toast-pulse 1.1s ease-in-out infinite; }
+.yds-toast-ok { color: #c9f5d4; }
+.yds-toast-ok::before { background: #3ddc84; }
+.yds-toast-warn { color: #ffe3b8; }
+.yds-toast-warn::before { background: #f0a73c; }
+.yds-toast-error { color: #ffd2d2; }
+.yds-toast-error::before { background: #ff4d4d; }
+
+@keyframes yds-toast-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.45; transform: scale(0.82); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .yds-toast { transition: none; }
+  .yds-toast-busy::before { animation: none; }
+}
+
+/* ---------- paid API confirmation ----------
+   The site's half of the palette, not the popup's. The popup is light because
+   it sits on the browser's own chrome; this card sits on someone's video, which
+   is usually dark and often full screen — a light panel there is a flash in the
+   face. Same type, same brand red, same radii as everything else we draw. */
 .yds-paid-api-confirm {
   position: fixed;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(8, 6, 7, 0.58);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
   z-index: 2147483647;
-  font-family: "YouTube Sans", "Roboto", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont,
+               "Segoe UI", "PingFang SC", "Hiragino Sans GB", Roboto, sans-serif;
+  letter-spacing: 0.02em;
 }
 
 .yds-paid-api-card {
   width: min(420px, calc(100vw - 40px));
-  padding: 18px;
-  border-radius: 8px;
-  background: rgba(24, 24, 24, 0.96);
-  color: #fff;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  padding: 24px 24px 20px;
+  border-radius: 18px;
+  color: #f5f5f5;
+  /* The same bloom the site's sections carry, so the red reads as ours rather
+     than as a warning colour. */
+  background:
+    radial-gradient(260px 180px at calc(100% + 30px) -40px, rgba(255, 0, 51, 0.26), transparent 70%),
+    linear-gradient(160deg, #1d1d1f 0%, #171718 60%, #141415 100%);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.62);
 }
 
 .yds-paid-api-title {
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 700;
-  line-height: 1.35;
+  line-height: 1.32;
+  letter-spacing: -0.01em;
   margin-bottom: 8px;
 }
 
 .yds-paid-api-body {
   font-size: 14px;
-  line-height: 1.5;
-  color: rgba(255, 255, 255, 0.82);
-  margin-bottom: 16px;
+  line-height: 1.55;
+  color: #a3a3a3;
+  margin-bottom: 20px;
 }
 
 .yds-paid-api-actions {
@@ -173,21 +361,40 @@ body.yds-suppressing-native .ytp-caption-window-container {
   gap: 10px;
 }
 
+/* Buttons do not inherit the family on their own, so `font: inherit` is doing
+   real work here — without it these fall back to the platform UI font and the
+   card stops looking like one piece. */
 .yds-paid-api-actions button {
-  border: 0;
-  border-radius: 6px;
-  padding: 8px 12px;
+  font: inherit;
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  padding: 10px 16px;
   cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .yds-paid-api-free {
-  background: rgba(255, 255, 255, 0.14);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #f5f5f5;
 }
+.yds-paid-api-free:hover { background: rgba(255, 255, 255, 0.13); }
 
 .yds-paid-api-use {
-  background: #3ea6ff;
-  color: #06121d;
+  background: #ff0033;
+  color: #fff;
+  box-shadow: 0 6px 20px rgba(255, 0, 51, 0.38);
+}
+.yds-paid-api-use:hover { background: #e60030; }
+
+.yds-paid-api-actions button:focus-visible {
+  outline: 2px solid rgba(255, 77, 109, 0.75);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yds-paid-api-actions button { transition: none; }
 }

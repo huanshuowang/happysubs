@@ -25,7 +25,7 @@ const STORE = { ydsSettings: { enabled: true, secondLang: "en", bottomOffset: 20
                                translationProvider: "google", translationOnly: false, apiKeys: {} } };
 const changeListeners = [];
 window.chrome = {
-  runtime: { getURL: (f) => "/" + f, onMessage: { addListener() {} }, lastError: null },
+  runtime: { id: "yds-test", getURL: (f) => "/" + f, onMessage: { addListener() {} }, lastError: null },
   storage: {
     sync: {
       get: (k, cb) => setTimeout(() => cb(JSON.parse(JSON.stringify(STORE))), 0),
@@ -103,6 +103,17 @@ const overlayText = () => {
   return t ? t.textContent : "";
 };
 const settle = (ms = 400) => new Promise(r => setTimeout(r, ms));
+// Waiting a fixed number of milliseconds for the translation to land made this
+// harness fail about one run in two: the request, the render and the tick that
+// draws it are all async, and 600ms is on the edge. Wait for the thing itself.
+const waitFor = async (fn, ms = 4000) => {
+  const until = Date.now() + ms;
+  while (Date.now() < until) {
+    if (fn()) return true;
+    await settle(60);
+  }
+  return false;
+};
 
 (async () => {
   Object.defineProperty(document.getElementById("v"), "currentTime", { get: () => 1, configurable: true });
@@ -116,7 +127,7 @@ const settle = (ms = 400) => new Promise(r => setTimeout(r, ms));
   // --- default mode, CC opened ---
   window.__ccOn(true);
   window.__ctx.onTrackList([{ languageCode: "de", kind: "", name: "Deutsch" }]);   // player re-publishes
-  await settle(600);
+  await waitFor(() => overlayText() !== "");
   const afterCc = overlayText();
   check("default + CC on: overlay shows the translation", afterCc !== "", JSON.stringify(afterCc));
 

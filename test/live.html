@@ -35,11 +35,17 @@ window.WebSocket = class FakeWS {
 window.WebSocket.OPEN = 1;
 
 // Count and time translation calls, so we can tell a throttle from a debounce.
+//
+// Both Google endpoints count. dict-chrome-ex on clients5 is the primary and
+// gtx is only the spare, so watching gtx alone reports zero translations on a
+// perfectly healthy run — which is what this assertion did until it was caught
+// against a tree where translation demonstrably worked.
+const TRANSLATE_HOSTS = ["clients5.google.com", "translate.googleapis.com"];
 window.__translations = [];
 const realFetch = window.fetch.bind(window);
 window.fetch = (url, opts) => {
   const u = String(url && url.url ? url.url : url);
-  if (u.includes("translate.googleapis.com")) {
+  if (TRANSLATE_HOSTS.some(h => u.includes(h))) {
     window.__translations.push({ at: Date.now(), q: new URL(u).searchParams.get("q") });
   }
   return realFetch(url, opts);
@@ -63,7 +69,7 @@ const STORE = { ydsSettings: { enabled: true, secondLang: "zh-Hans", uiLang: "au
                                translationOnly: false, apiKeys: {} } };
 const messageHandlers = [];
 window.chrome = {
-  runtime: { getURL: (f) => "/" + f, onMessage: { addListener: (fn) => messageHandlers.push(fn) }, lastError: null },
+  runtime: { id: "yds-test", getURL: (f) => "/" + f, onMessage: { addListener: (fn) => messageHandlers.push(fn) }, lastError: null },
   i18n: { getUILanguage: () => "en-US" },
   storage: { sync: { get: (k, cb) => setTimeout(() => cb(JSON.parse(JSON.stringify(STORE))), 0),
                      set: (o, cb) => { Object.assign(STORE, o); cb && cb(); } },
