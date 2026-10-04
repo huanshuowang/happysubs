@@ -260,6 +260,13 @@
       font-size: 12px;
       line-height: 1.5;
       color: var(--ink-soft);
+      /* A provider's error can be one unbroken token — a request id, a JSON
+         blob. Without this it cannot wrap, and it pushes the popup wider than
+         the window. Belt and braces: wrap anywhere, and cap the height. */
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      max-height: 84px;
+      overflow-y: auto;
     }
     /* Dark follows the browser — no switch of its own. Same identity: frosted
        panels over a warm ground with rose blooms behind them, inverted. The

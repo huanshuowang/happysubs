@@ -473,15 +473,22 @@
   }
 
   let paidAskRetryTimer = null;
+  // Set once the grace period below has elapsed, so the next attempt goes ahead
+  // without the track list instead of waiting for it again.
+  let paidAskWaitedForTracks = false;
 
   function clearPaidAskRetry() {
     if (paidAskRetryTimer) { clearTimeout(paidAskRetryTimer); paidAskRetryTimer = null; }
+    paidAskWaitedForTracks = false;
   }
 
   function maybeAskForPaidApi(cues, tl, reason) {
     const provider = selectedTranslationProvider();
     if (!isPaidProvider(provider)) return;
-    if (getNativeTargetTrack() || preCuesNative.length) return;
+    if (getNativeTargetTrack() || preCuesNative.length) {
+      log(`paid ask skipped (${reason}): a native ${STATE.settings.secondLang} track is in play`);
+      return;
+    }
 
     // The track list is what proves no native target-language track exists, so
     // we would rather have it before spending the viewer's money. But on some
@@ -489,16 +496,20 @@
     // is why a paid provider could sit there selected and never once be
     // offered. Wait a beat for the list, then decide without it: the cues are
     // already loaded, so there is no native track in play either way.
-    if (!availableTracks.length) {
+    // Wait once — the retry re-entered this same branch and rescheduled itself,
+    // so the question was deferred for ever and never actually asked.
+    if (!availableTracks.length && !paidAskWaitedForTracks) {
+      log(`paid ask waiting 2.5s for the track list (${reason})`);
       if (!paidAskRetryTimer) {
         paidAskRetryTimer = setTimeout(() => {
           paidAskRetryTimer = null;
+          paidAskWaitedForTracks = true;
           if (!preCuesNative.length) maybeAskForPaidApi(cues, tl, `${reason} (no track list)`);
         }, 2500);
       }
       return;
     }
-    clearPaidAskRetry();
+    if (paidAskRetryTimer) { clearTimeout(paidAskRetryTimer); paidAskRetryTimer = null; }
 
     const key = paidDecisionKey(provider);
     const decision = paidApiDecisions.get(key);
@@ -508,7 +519,10 @@
       }
       return;
     }
-    if (decision === "declined" || paidApiPromptEl) return;
+    if (decision === "declined" || paidApiPromptEl) {
+      log(`paid ask skipped (${reason}): ${decision === "declined" ? "declined for this video" : "a prompt is already up"}`);
+      return;
+    }
 
     const apiKey = (STATE.settings.apiKeys || {})[provider];
     if (!apiKey) {
@@ -528,12 +542,14 @@
       mode: "awaiting_paid_confirmation",
       provider: "google",
       requestedProvider: provider,
+      switchedByUser: /settings changed/.test(reason),
       cueCount: preCuesTranslated.length,
       totalCount: cues.length,
       translatedCount: preCuesTranslated.length,
       error: ""
     });
     const mode = STATE.settings.paidApiMode || "ask";
+    log(`paid ask: ${providerDisplayName(provider)}, policy "${mode}" (${reason})`);
     // "always" means the viewer has already answered this question once and for
     // all; asking again every video is the thing they turned off.
     if (mode === "always") { approvePaidApiForCurrentVideo(`${reason} (always use paid API)`); return; }
@@ -582,16 +598,27 @@
     paidApiPromptEl = root;
   }
 
-  async function refreshApiKeysFromStorage() {
+  async function refreshSettingsFromStorage() {
     const stored = (await chrome.storage.sync.get(["ydsSettings"])).ydsSettings || {};
-    if (stored.apiKeys) STATE.settings.apiKeys = stored.apiKeys;
-    if (stored.models) STATE.settings.models = stored.models;
+    Object.assign(STATE.settings, stored);
   }
 
   function approvePaidApiForCurrentVideo(reason = "popup approval") {
     const provider = selectedTranslationProvider();
-    if (!isPaidProvider(provider)) return { ok: false, error: ydsT("notPaidProvider") };
-    if (!sourceCuesCache || preCuesNative.length) return { ok: false, error: ydsT("noSourceCues") };
+    if (!isPaidProvider(provider)) {
+      log(`paid approve refused: provider is "${provider}", not a paid one`);
+      return { ok: false, error: ydsT("notPaidProvider") };
+    }
+    // No captions in hand means there is nothing to send the API. It happens
+    // when the track never loaded for this video, and a reload is the only
+    // thing that fixes it — so say that rather than failing silently.
+    if (!sourceCuesCache || preCuesNative.length) {
+      log(`paid approve refused: ${preCuesNative.length ? "a native track is showing" : "no source cues yet"}`);
+      if (!preCuesNative.length) {
+        setTranslationStatus({ mode: "needs_reload", requestedProvider: provider });
+      }
+      return { ok: false, error: ydsT("noSourceCues") };
+    }
     const apiKey = (STATE.settings.apiKeys || {})[provider];
     if (!apiKey) {
       setTranslationStatus({ mode: "need_api_key", requestedProvider: provider });
@@ -1226,6 +1253,25 @@ Translations:`;
     return out || text;
   }
 
+  // Providers answer failures with JSON. Pasting 200 characters of it into the
+  // popup is how a status line turned into a wall of braces and request ids —
+  // and none of it tells the viewer what to do. Map the status code to one
+  // sentence and keep the body in the log.
+  async function providerError(name, res) {
+    let body = "";
+    try { body = (await res.text()).slice(0, 400); } catch {}
+    log(`${name} ${res.status} response:`, body);
+    const code = res.status;
+    const key =
+      code === 401 || code === 403 ? "errKeyRejected" :
+      code === 402                 ? "errNoCredit" :
+      code === 429                 ? "errRateLimited" :
+      code >= 500                  ? "errProviderDown" :
+      code === 400                 ? "errBadRequest" : "";
+    const said = key ? ydsT(key, { name }) : `${name} HTTP ${code}`;
+    return new Error(said);
+  }
+
   // ----- Claude (Anthropic) -----
   async function translateBatchClaude(texts, tl, apiKey, signal) {
     const prompt = buildLLMPrompt(texts, tl);
@@ -1247,7 +1293,7 @@ Translations:`;
       }),
       signal
     });
-    if (!res.ok) throw new Error(`Claude ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    if (!res.ok) throw await providerError("Claude", res);
     const data = await res.json();
     const content = (data.content || []).filter(c => c.type === "text").map(c => c.text).join("");
     return parseLLMOutput(content, texts.length);
@@ -1272,7 +1318,7 @@ Translations:`;
       }),
       signal
     });
-    if (!res.ok) throw new Error(`OpenAI ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    if (!res.ok) throw await providerError("OpenAI", res);
     const data = await res.json();
     const content = data?.choices?.[0]?.message?.content || "";
     return parseLLMOutput(content, texts.length);
@@ -1298,7 +1344,7 @@ Translations:`;
       }),
       signal
     });
-    if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    if (!res.ok) throw await providerError("Gemini", res);
     const data = await res.json();
     const content = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
     return parseLLMOutput(content, texts.length);
@@ -1323,7 +1369,7 @@ Translations:`;
       }),
       signal
     });
-    if (!res.ok) throw new Error(`DeepSeek ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    if (!res.ok) throw await providerError("DeepSeek", res);
     const data = await res.json();
     const content = data?.choices?.[0]?.message?.content || "";
     return parseLLMOutput(content, texts.length);
@@ -2148,16 +2194,25 @@ Translations:`;
         const head = pendingPaid ? `${ydsT("toastPendingPaid", { name: pendingPaid })} · ` : "";
         return { kind: "busy", text: head + ydsT("toastTranslating", { name }) + count, sticky: true };
       }
+      case "needs_reload":
+        return { kind: "warn", text: ydsT("toastNeedsReload"), sticky: true };
       case "need_api_key":
         return { kind: "warn",
                  text: ydsT("toastNoKey", { name: providerDisplayName(st.requestedProvider || chosen) }),
                  sticky: true };
-      case "awaiting_paid_confirmation":
+      case "awaiting_paid_confirmation": {
         // The confirmation card says this already when it is up.
-        return paidApiPromptEl ? null
-          : { kind: "warn",
-              text: ydsT("toastAwaiting", { name: providerDisplayName(st.requestedProvider || chosen) }),
-              sticky: true };
+        if (paidApiPromptEl) return null;
+        const manual = (STATE.settings.paidApiMode || "ask") === "manual";
+        // On "only when I press the button" there is nothing to wait for, so a
+        // standing instruction to press it is nagging. The exception is the
+        // moment the viewer switches to a paid provider mid-video: then it
+        // answers the question they just asked, and leaves.
+        if (manual && !st.switchedByUser) return null;
+        return { kind: "warn",
+                 text: ydsT("toastAwaiting", { name: providerDisplayName(st.requestedProvider || chosen) }),
+                 sticky: !manual, hold: 6000 };
+      }
       case "error":
         return { kind: "error", text: ydsT("toastFailed", { name }) + (st.error ? ` — ${st.error}` : ""), sticky: true };
       case "fallback":
@@ -2186,7 +2241,7 @@ Translations:`;
     if (toastHideTimer) { clearTimeout(toastHideTimer); toastHideTimer = null; }
     // Anything the viewer may need to act on stays; anything that is just good
     // news gets out of the way.
-    if (!spec.sticky) toastHideTimer = setTimeout(hideToast, 2600);
+    if (!spec.sticky) toastHideTimer = setTimeout(hideToast, spec.hold || 2600);
   }
 
   function ensureOverlay() {
@@ -3240,7 +3295,7 @@ Translations:`;
     if (msg?.type === "YDS_APPROVE_PAID_API") {
       // Read the key straight from storage first: the popup may have saved it
       // microseconds ago and our storage.onChanged may not have run yet.
-      refreshApiKeysFromStorage()
+      refreshSettingsFromStorage()
         .then(() => sendResponse(approvePaidApiForCurrentVideo("popup approval")))
         .catch(() => sendResponse(approvePaidApiForCurrentVideo("popup approval")));
       return true;   // async

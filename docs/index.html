@@ -616,7 +616,7 @@
     <div class="container">
       <img class="hero-mark" src="icons/icon128.png" width="128" height="128" alt="" />
       <h1 data-en="Dual subtitles for your videos">为视频添加双语字幕</h1>
-      <div class="version-pill">v2.1.0</div>
+      <div class="version-pill">v2.1.1</div>
       <p class="sub" data-en="Currently supports <strong>YouTube</strong>, <strong>Vimeo</strong> and <strong>Bilibili</strong>. Uses the video's own subtitles plus free Google Translate, with optional Claude / OpenAI / Gemini / DeepSeek AI translation. Videos with no subtitles at all can be transcribed as they play.">
         目前支持 <strong>YouTube</strong>、<strong>Vimeo</strong> 和 <strong>Bilibili</strong>。使用视频自带字幕 + Google 免费翻译，也可选 Claude / OpenAI / Gemini / DeepSeek AI 翻译。完全没有字幕的视频，可以边播边听译。
       </p>
@@ -865,6 +865,12 @@ iwr "$repo/start.bat" -OutFile start.bat</pre>
       <h2 data-en="Changelog">更新日志</h2>
 
       <details open>
+        <summary data-en="2.1.1 — fixes for AI translation">2.1.1 — AI 翻译的几个修复</summary>
+        <p data-en="The paid API now actually offers itself. On videos where the player never published its caption list, 2.1.0 would wait for that list for ever and never ask whether to use your API — and switching translator mid-video left the button refusing to start. Both are fixed, and when the button cannot run it now says why, on the video, instead of failing quietly."><strong>付费 API 现在真的会主动问你了。</strong>有些视频播放器始终不公布字幕轨列表，2.1.0 会一直等下去、永远不弹确认框；在视频里换翻译源之后，按钮也会拒绝启动。两个都修好了。按钮用不了的时候，现在会在视频上直接说明原因，而不是默默失败。</p>
+        <p data-en="Provider errors read as one sentence. A rejected API key used to arrive as 200 characters of the provider&#39;s JSON, which also pushed the popup wider than the window. Now it says what went wrong and what to do about it."><strong>翻译源的报错变成一句人话。</strong>API Key 被拒绝时，以前会把对方返回的 200 字符 JSON 整段贴出来，还会把弹窗撑得比窗口还宽。现在只说出了什么问题、该怎么办。</p>
+      </details>
+
+      <details>
         <summary data-en="2.1.0 — two languages, one subtitle">2.1.0 — 双语合成一条字幕</summary>
         <p data-en="<strong>One subtitle, two languages.</strong> The translation used to be a separate line pinned under the player&#39;s caption, two rows with two different looks, often fighting for the same space. Now both appear and change together, once per sentence. Auto-captions no longer scroll in word by word; a settled sentence takes their place. Want every video to look like that? Turn on &quot;Always draw both languages myself&quot;."><strong>一条字幕，两种语言。</strong>以前译文是另画一行贴在播放器字幕下面，两行各长各样，还常常挤在一起。现在两行一起出现、一起换，一句一次。自动生成字幕不再滚动出现文字，换成整理好的整句。想让所有视频都这样，打开「所有视频都由插件画双语」即可。</p>
         <p data-en="<strong>Style it yourself, and the two languages need not match.</strong> Size, colour and background transparency for the original and the translation on their own, or locked together with one switch, and one tap puts everything back. Rounded plates hug the words, a soft shadow sits under the text, and the two rows stay tight without overlapping."><strong>外观归你调，原文译文可以不一样。</strong>字号、颜色、背景透明度，原文和译文各调各的，也能一个开关锁成同一套；调乱了一键恢复默认。圆角底板贴合文字、文字带柔和阴影，两行紧挨着又不重叠。</p>

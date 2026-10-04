@@ -607,11 +607,26 @@ function statusTextFor(info, tab) {
   return ydsT("statusTurnOnCC");
 }
 
+// An error the viewer has to read must survive the status poll. Without this
+// the explanation for a refused button appeared and was overwritten within the
+// second, which looked exactly like the button doing nothing at all.
+let statusPinnedUntil = 0;
+
+function pinStatus(text, ms = 8000) {
+  $("status").textContent = text;
+  statusPinnedUntil = Date.now() + ms;
+}
+
+function writeStatus(text) {
+  if (Date.now() < statusPinnedUntil) return;
+  $("status").textContent = text;
+}
+
 async function refreshStatusSoon(delay = 900) {
   if (!activeTabId) return;
   setTimeout(async () => {
     const info = await askContent(activeTabId);
-    $("status").textContent = statusTextFor(info, { id: activeTabId });
+    writeStatus(statusTextFor(info, { id: activeTabId }));
   }, delay);
 }
 
@@ -625,7 +640,7 @@ function startStatusPolling() {
   if (!activeTabId || statusPollTimer) return;
   statusPollTimer = setInterval(async () => {
     const info = await askContent(activeTabId);
-    $("status").textContent = statusTextFor(info, { id: activeTabId });
+    writeStatus(statusTextFor(info, { id: activeTabId }));
     const mode = info?.translationStatus?.mode;
     if (mode && mode !== "translating" && mode !== "awaiting_paid_confirmation") {
       clearInterval(statusPollTimer);
@@ -1042,7 +1057,7 @@ async function init() {
     $("status").textContent = ydsT("statusStartingPaid", { name: providerName(provider) });
     const resp = await sendContent(activeTabId, { type: "YDS_APPROVE_PAID_API" });
     if (!resp?.ok) {
-      $("status").textContent = resp?.error || ydsT("statusPaidFailed");
+      pinStatus(resp?.error || ydsT("statusPaidFailed"));
       return;
     }
     refreshStatusSeries();
