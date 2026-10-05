@@ -60,6 +60,87 @@
       footerNote: "免费、开源，不收集任何使用数据。",
       linkSite: "官网",
       linkPrivacy: "隐私政策"
+    },
+    "zh-Hant": {
+      pageTitle: "HappySubs 已安裝",
+      eyebrow: "已安裝",
+      headline: "裝好了。<br>在 YouTube 上，先<em>開啟 CC</em>。",
+      lede: "HappySubs 翻譯的是影片內建的字幕。Vimeo 和 B⁠站 上什麼都不用開。",
+      demoAlt: "示範：工具列裡的 HappySubs 圖示，然後點下播放器的 CC，字幕以兩種語言出現。",
+      demoBadge: "示範",
+      step1Title: "固定到工具列",
+      step1Body: "點位址列右邊的拼圖圖示，再點 HappySubs 旁邊的圖釘。",
+      step2Title: "開啟影片，點 CC",
+      step2Body: "在播放器右下角。<strong>安裝前就開著的影片頁，要先重新整理一次。</strong>",
+      step3Title: "雙語字幕出現",
+      step3Body: "原文和譯文合成一條，一句一換。以後想換語言，點工具列圖示就行。",
+      pickLabel: "字幕翻譯成",
+      pickSaved: "✓ 已儲存",
+      tryIt: "開啟一個影片試試",
+      tryNote: "一個帶人工字幕的 TED 演講",
+      tipsTitle: "幾個順手的功能",
+      tipLive: "影片完全沒有字幕？<a href=\"https://huanshuowang.com/happysubs/#live\" target=\"_blank\" rel=\"noopener\">即時聽譯</a>可以邊播邊寫出來。",
+      tipShortcut: "{key} 隨時開關第二語言，不用開啟彈出視窗。",
+      tipOnly: "在彈出視窗裡開啟<strong>「僅顯示翻譯字幕」</strong>，不開 CC 也能只看譯文。",
+      tipDrag: "滑鼠碰到字幕會浮出把手，<strong>按住就能上下拖</strong>，全螢幕也行。",
+      tipSrt: "正在看的字幕可以匯出成 <strong>.srt</strong>，雙語、僅原文、僅譯文都行。",
+      footerNote: "免費、開源，不收集任何使用資料。",
+      linkSite: "官網",
+      linkPrivacy: "隱私政策"
+    },
+    ja: {
+      pageTitle: "HappySubs へようこそ",
+      eyebrow: "インストール完了",
+      headline: "準備完了。<br>YouTubeでは<em>CCをオン</em>に。",
+      lede: "HappySubs は動画にもともとある字幕を翻訳します。Vimeo と Bilibili では何もオンにする必要はありません。",
+      demoAlt: "デモ：ツールバーの HappySubs アイコン、続いてプレーヤーの CC ボタンをクリックすると、字幕が2言語で表示されます。",
+      demoBadge: "デモ",
+      step1Title: "ツールバーに固定",
+      step1Body: "アドレスバー右のパズルのアイコンをクリックし、HappySubs の横のピンを押します。",
+      step2Title: "動画を開いて CC をクリック",
+      step2Body: "プレーヤーの右下にあります。<strong>インストール前から開いていた動画ページは再読み込みしてください。</strong>",
+      step3Title: "2言語が表示されます",
+      step3Body: "原文と訳文が1つの字幕になり、一文ずつ切り替わります。言語はツールバーのアイコンからいつでも変えられます。",
+      pickLabel: "字幕の翻訳先",
+      pickSaved: "✓ 保存しました",
+      tryIt: "動画で試してみる",
+      tryNote: "人が作った字幕付きの TED トーク",
+      tipsTitle: "知っておくと便利",
+      tipLive: "字幕がまったくない動画は？ <a href=\"https://huanshuowang.com/happysubs/#live\" target=\"_blank\" rel=\"noopener\">リアルタイム文字起こし</a>で、再生しながら字幕を作れます。",
+      tipShortcut: "{key} で、ポップアップを開かずに第2言語をオン/オフ。",
+      tipOnly: "ポップアップで<strong>訳文のみ表示</strong>をオンにすると、CC をオフにしたまま訳文だけを読めます。",
+      tipDrag: "字幕にマウスを乗せるとハンドルが出ます。<strong>ドラッグ</strong>して上下に動かせます（全画面でも）。",
+      tipSrt: "見ている字幕を <strong>.srt</strong> でダウンロード。2言語でも、どちらか一方でも。",
+      footerNote: "無料・オープンソース・利用データの収集なし。",
+      linkSite: "ウェブサイト",
+      linkPrivacy: "プライバシー"
+    },
+    vi: {
+      pageTitle: "Chào mừng đến với HappySubs",
+      eyebrow: "Đã cài đặt",
+      headline: "Xong rồi.<br>Hãy <em>bật CC</em> trên YouTube.",
+      lede: "HappySubs dịch phụ đề có sẵn của video. Trên Vimeo và Bilibili thì không cần bật gì cả.",
+      demoAlt: "Minh họa: biểu tượng HappySubs trên thanh công cụ, sau đó bấm nút CC của trình phát, phụ đề hiện ra bằng hai ngôn ngữ.",
+      demoBadge: "MINH HỌA",
+      step1Title: "Ghim lên thanh công cụ",
+      step1Body: "Bấm biểu tượng mảnh ghép cạnh thanh địa chỉ, rồi bấm ghim bên cạnh HappySubs.",
+      step2Title: "Mở video, bấm CC",
+      step2Body: "Ở góc dưới bên phải trình phát. <strong>Hãy tải lại các trang video đã mở từ trước khi cài.</strong>",
+      step3Title: "Hiện cả hai ngôn ngữ",
+      step3Body: "Bản gốc và bản dịch hiện cùng nhau, đổi theo từng câu. Có thể đổi ngôn ngữ bất cứ lúc nào từ biểu tượng trên thanh công cụ.",
+      pickLabel: "Dịch phụ đề sang",
+      pickSaved: "✓ Đã lưu",
+      tryIt: "Thử trên một video",
+      tryNote: "Một bài nói TED có phụ đề do người làm",
+      tipsTitle: "Mẹo hữu ích",
+      tipLive: "Video không có phụ đề nào? <a href=\"https://huanshuowang.com/happysubs/#live\" target=\"_blank\" rel=\"noopener\">Phụ đề trực tiếp</a> sẽ viết ra trong lúc phát.",
+      tipShortcut: "{key} để bật/tắt ngôn ngữ thứ hai mà không cần mở cửa sổ tiện ích.",
+      tipOnly: "Bật <strong>Chỉ hiện bản dịch</strong> trong cửa sổ tiện ích để chỉ đọc bản dịch khi đang tắt CC.",
+      tipDrag: "Di chuột lên phụ đề sẽ hiện tay cầm — <strong>kéo</strong> lên hoặc xuống, kể cả khi toàn màn hình.",
+      tipSrt: "Tải phụ đề đang xem dưới dạng <strong>.srt</strong>, song ngữ hoặc một ngôn ngữ.",
+      footerNote: "Miễn phí, mã nguồn mở, không thu thập dữ liệu sử dụng.",
+      linkSite: "Trang web",
+      linkPrivacy: "Quyền riêng tư"
     }
   };
 
@@ -105,7 +186,7 @@
   }
 
   function fill(t, uiLang, secondLang) {
-    document.documentElement.lang = uiLang === "zh" ? "zh-CN" : "en";
+    document.documentElement.lang = { zh: "zh-CN", "zh-Hant": "zh-Hant", ja: "ja", vi: "vi" }[uiLang] || "en";
     document.title = t.pageTitle;
     for (const el of document.querySelectorAll("[data-t]")) el.textContent = t[el.dataset.t];
     // Only this file's own constants ever go through innerHTML.
@@ -118,10 +199,7 @@
     showDemo(secondLang);
     buildPicker(document.getElementById("secondLang"), secondLang);
 
-    // Names the language it switches to, in that language.
-    const toggle = document.getElementById("langToggle");
-    toggle.textContent = uiLang === "zh" ? "EN" : "中";
-    toggle.setAttribute("aria-label", uiLang === "zh" ? "Switch to English" : "切换到中文");
+    document.getElementById("pageLang").value = uiLang;
   }
 
   function showDemo(secondLang) {
@@ -177,14 +255,14 @@
   storedSettings().then((s) => {
     const uiLang = typeof ydsSetUiLang === "function" ? ydsSetUiLang(s.uiLang) : "en";
     let secondLang = s.secondLang || (typeof ydsDefaultSecondLang === "function" ? ydsDefaultSecondLang() : "zh-Hans");
-    let current = uiLang === "zh" ? "zh" : "en";
+    let current = STRINGS[uiLang] ? uiLang : "en";
     fill(STRINGS[current], current, secondLang);
 
     // The switch here is the panel's own language setting, not just this
     // page's: someone who flips it on their first screen wants the popup in
     // that language too, and would otherwise have to find the setting again.
-    document.getElementById("langToggle").addEventListener("click", () => {
-      current = current === "zh" ? "en" : "zh";
+    document.getElementById("pageLang").addEventListener("change", (e) => {
+      current = STRINGS[e.target.value] ? e.target.value : "en";
       if (typeof ydsSetUiLang === "function") ydsSetUiLang(current);
       fill(STRINGS[current], current, secondLang);
       saveSetting({ uiLang: current });

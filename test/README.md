@@ -46,7 +46,7 @@ http://localhost:8794/test/inline-follow.html
 
 ### `test/welcome.html`
 
-引导页的「字幕翻译成」下拉框（9 条）。用真实的 `welcome.html` 和脚本：列表和弹窗一样，先常用、再全部语言（共用 `languages.js`）；显示的是已经保存的语言而不是浏览器默认；选了立即保存、不动其他设置、显示「已保存」、演示动画换成那种语言；切换页面语言后选择还在，分组标题和标签跟着换。
+引导页（13 条）：「字幕翻译成」下拉框，以及右上角的页面语言切换（English / 简体中文 / 繁體中文 / 日本語 / Tiếng Việt）。用真实的 `welcome.html` 和脚本：列表和弹窗一样，先常用、再全部语言（共用 `languages.js`）；显示的是已经保存的语言而不是浏览器默认；选了立即保存、不动其他设置、显示「已保存」、演示动画换成那种语言；切换页面语言后选择还在，分组标题和标签跟着换；繁体中文、日语、越南语页面用的是各自的文案，并把面板语言一起保存。
 
 http://localhost:8794/test/welcome.html
 
@@ -129,7 +129,7 @@ http://localhost:8794/test/source-switch.html
 
 弹窗测试（每种语言 6 条）。同样是把真实的 `popup.html` 标签抓进来、跑真实的 `i18n.js` 和 `popup.js`，重点是 `init()` 要能整个跑完——它中途抛异常的话弹窗会画一半、状态栏显示「初始化失败」，而各个控件看起来只是"空着"，不容易一眼看出是坏了。
 
-加 `?uiLang=zh` / `?uiLang=en` / `?uiLang=auto` 分别测三种面板语言设置（桩里的浏览器语言是 en-US）。
+加 `?uiLang=zh` / `?uiLang=zh-Hant` / `?uiLang=ja` / `?uiLang=vi` / `?uiLang=en` / `?uiLang=auto` 分别测各种面板语言设置（桩里的浏览器语言是 en-US）。
 
 http://localhost:8794/test/popup.html?uiLang=zh
 

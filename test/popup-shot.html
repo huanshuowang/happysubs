@@ -9,6 +9,7 @@
 
     ?view=main|settings   which screen to shoot
     ?scheme=dark|light    the popup's own colour scheme
+    ?uiLang=en|zh|ja|vi   the panel language
 
   The scheme is forced by rewriting the popup's own prefers-color-scheme block
   into a plain rule, because headless Chrome will not emulate the media query
@@ -26,7 +27,7 @@ const VIEW   = Q.get("view")   || "main";
 const SCHEME = Q.get("scheme") || "dark";
 
 const STORE = { ydsSettings: {
-  enabled: true, secondLang: "zh-Hans", uiLang: "en", translationOnly: false,
+  enabled: true, secondLang: "zh-Hans", uiLang: Q.get("uiLang") || "en", translationOnly: false,
   bottomOffset: 22, fontSize: 22, color: "#ffffff", background: "rgba(0,0,0,0.6)",
   captionWidth: 80, unifyStyles: false, sourceFontSize: 22, sourceColor: "#ffffff",
   subtitleMode: "inline", takeoverCaptions: true,

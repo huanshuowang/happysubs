@@ -45,7 +45,7 @@
       // Translation provider: "google" | "claude" | "openai" | "gemini" | "deepseek".
       // Google is free/anonymous; the others need the user's own API key.
       translationProvider: "google",
-      uiLang: "auto",          // panel language: "auto" | "zh" | "en"
+      uiLang: "auto",          // panel language: "auto" | "en" | "zh" | "ja" | "vi"
       // Off by default the overlay rides along with the player's own caption
       // strip: no native captions, no second language. Turning this on detaches
       // it, so the translation shows on its own with the player's CC closed.

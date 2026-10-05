@@ -45,12 +45,16 @@
     .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--text); font-weight: 700; font-size: 17px; }
     .brand:hover { text-decoration: none; }
     .brand svg { width: 24px; height: 24px; color: var(--brand); }
+    .lang-toggle option { color: #111; }
     .lang-toggle {
-      background: transparent; color: var(--text-dim);
+      -webkit-appearance: none; appearance: none;
+      color: var(--text-dim);
+      background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23a3a3a3' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 11px center / 9px 6px;
       border: 1px solid var(--border-control); border-radius: 999px;
-      padding: 5px 12px; font: inherit; font-size: 13px; cursor: pointer;
+      padding: 5px 28px 5px 12px; font: inherit; font-size: 13px; cursor: pointer;
     }
-    .lang-toggle:hover { color: var(--text); background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.55); }
+    .lang-toggle:hover { color: var(--text); background-color: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.55); }
+    .lang-toggle:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 3px; }
 
     h1 { font-size: clamp(28px, 6vw, 36px); line-height: 1.2; letter-spacing: -0.02em; margin: 40px 0 12px; font-weight: 800; }
     .lede { color: var(--text-dim); font-size: 16.5px; margin: 0 0 28px; }
@@ -137,92 +141,106 @@
         </g></svg>
         HappySubs
       </a>
-      <button class="lang-toggle" id="langToggle" type="button" aria-label="Switch to English">EN</button>
+      <select class="lang-toggle" id="langToggle" aria-label="Language">
+        <option value="en">English</option>
+        <option value="zh">简体中文</option>
+        <option value="zh-Hant">繁體中文</option>
+        <option value="ja">日本語</option>
+        <option value="vi">Tiếng Việt</option>
+      </select>
     </header>
 
     <main>
-      <h1 data-en="HappySubs has been removed">HappySubs 已卸载</h1>
-      <p class="lede" data-en="Could you spare ten seconds to tell me why? I'm an independent developer, and your feedback makes this product better. Thank you!">可以花 10 秒告诉我为什么吗？我是一个独立开发者，你的反馈会让我的产品变得更好。感谢！</p>
+      <h1 data-en="HappySubs has been removed" data-ja="HappySubs をアンインストールしました" data-vi="Đã gỡ cài đặt HappySubs" data-zh-hant="HappySubs 已移除">HappySubs 已卸载</h1>
+      <p class="lede" data-en="Could you spare ten seconds to tell me why? I'm an independent developer, and your feedback makes this product better. Thank you!" data-ja="なぜアンインストールしたのか、10秒だけ教えていただけますか？私は個人で開発しています。いただいた声で、この製品はもっと良くなります。ありがとうございます！" data-vi="Bạn có thể dành 10 giây cho mình biết lý do không? Mình là một nhà phát triển độc lập, và góp ý của bạn sẽ giúp sản phẩm tốt hơn. Cảm ơn bạn!" data-zh-hant="可以花 10 秒告訴我為什麼嗎？我是一個獨立開發者，你的回饋會讓我的產品變得更好。感謝！">可以花 10 秒告诉我为什么吗？我是一个独立开发者，你的反馈会让我的产品变得更好。感谢！</p>
 
       <form id="survey" novalidate>
         <fieldset>
-          <legend data-en="Why did you remove it?">为什么卸载了呢？</legend>
+          <legend data-en="Why did you remove it?" data-ja="アンインストールした理由は？" data-vi="Vì sao bạn gỡ cài đặt?" data-zh-hant="為什麼移除了呢？">为什么卸载了呢？</legend>
 
           <label class="choice">
             <input type="radio" name="reason" value="not-needed" />
-            <span data-en="I don't need it anymore">不再需要了</span>
+            <span data-en="I don't need it anymore" data-ja="もう必要なくなった" data-vi="Không cần dùng nữa" data-zh-hant="不再需要了">不再需要了</span>
           </label>
 
           <label class="choice">
             <input type="radio" name="reason" value="setup" />
-            <span data-en="It was too hard to install or set up<small>Including: installed, but a second subtitle never showed up</small>">装不上，或者设置太麻烦<small>装好了却一直没看到双语字幕，也选这个</small></span>
+            <span data-en="It was too hard to install or set up<small>Including: installed, but a second subtitle never showed up</small>" data-ja="インストールや設定が難しかった&lt;small&gt;インストールしたのに第2字幕が表示されなかった場合も&lt;/small&gt;" data-vi="Khó cài đặt hoặc thiết lập&lt;small&gt;Kể cả trường hợp đã cài nhưng không thấy phụ đề thứ hai&lt;/small&gt;" data-zh-hant="裝不上，或者設定太麻煩&lt;small&gt;裝好了卻一直沒看到雙語字幕，也選這個&lt;/small&gt;">装不上，或者设置太麻烦<small>装好了却一直没看到双语字幕，也选这个</small></span>
           </label>
           <div class="under" data-for="setup" hidden>
-            <div class="help" data-en='On YouTube, the player&#39;s own <strong>CC</strong> button (bottom right) has to be on before HappySubs has anything to translate — and video pages that were open before the install need a refresh. If that was it, <a href="https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf?utm_source=uninstall&amp;utm_medium=help" target="_blank" rel="noopener">reinstall it</a> and give it another go.'>
+            <div class="help" data-en='On YouTube, the player&#39;s own <strong>CC</strong> button (bottom right) has to be on before HappySubs has anything to translate — and video pages that were open before the install need a refresh. If that was it, <a href="https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf?utm_source=uninstall&amp;utm_medium=help" target="_blank" rel="noopener">reinstall it</a> and give it another go.' data-ja="YouTube では、HappySubs が翻訳するために、プレーヤー右下の &lt;strong&gt;CC&lt;/strong&gt; ボタンをオンにしておく必要があります。また、インストール前から開いていた動画ページは再読み込みが必要です。原因がこれなら、&lt;a href=&quot;https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf?utm_source=uninstall&amp;utm_medium=help&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;もう一度インストール&lt;/a&gt;して試してみてください。" data-vi="Trên YouTube, cần bật nút &lt;strong&gt;CC&lt;/strong&gt; của trình phát (góc dưới bên phải) thì HappySubs mới có phụ đề để dịch — và các trang video đã mở trước khi cài cần được tải lại. Nếu đúng là vậy, hãy &lt;a href=&quot;https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf?utm_source=uninstall&amp;utm_medium=help&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;cài lại&lt;/a&gt; và thử thêm lần nữa." data-zh-hant="YouTube 上要先開啟播放器右下角的 &lt;strong&gt;CC&lt;/strong&gt;，HappySubs 才拿得到字幕；安裝前就開著的影片頁也要先重新整理一次。如果是這個原因，&lt;a href=&quot;https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf?utm_source=uninstall&amp;amp;utm_medium=help&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;重新裝上&lt;/a&gt;再試一次就好。">
               YouTube 上要先打开播放器右下角的 <strong>CC</strong>，HappySubs 才拿得到字幕；安装前就开着的视频页也要先刷新一次。如果是这个原因，<a href="https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf?utm_source=uninstall&amp;utm_medium=help" target="_blank" rel="noopener">重新装上</a>再试一次就好。
             </div>
           </div>
 
           <label class="choice">
             <input type="radio" name="reason" value="stopped" />
-            <span data-en="It stopped working<small>It worked at first, then the subtitles stopped appearing</small>">用着用着失效了<small>一开始能用，后来字幕不出来了</small></span>
+            <span data-en="It stopped working<small>It worked at first, then the subtitles stopped appearing</small>" data-ja="途中で動かなくなった&lt;small&gt;最初は使えたが、字幕が表示されなくなった&lt;/small&gt;" data-vi="Đang dùng thì không hoạt động nữa&lt;small&gt;Lúc đầu dùng được, sau đó phụ đề không hiện nữa&lt;/small&gt;" data-zh-hant="用著用著失效了&lt;small&gt;一開始能用，後來字幕不出來了&lt;/small&gt;">用着用着失效了<small>一开始能用，后来字幕不出来了</small></span>
           </label>
           <div class="under" data-for="stopped" hidden>
-            <div class="help" data-en="A page refresh usually brings it back. If it doesn't, telling me which site or video it broke on helps me find the cause faster.">刷新一下页面通常就能恢复。如果还不行，告诉我是在哪个网站或视频上失效的，能帮助我更快找到原因。</div>
+            <div class="help" data-en="A page refresh usually brings it back. If it doesn't, telling me which site or video it broke on helps me find the cause faster." data-ja="ページを再読み込みすると、たいてい直ります。それでも直らない場合は、どのサイト・どの動画で起きたかを教えていただけると、原因を早く見つけられます。" data-vi="Tải lại trang thường sẽ khắc phục được. Nếu vẫn không được, hãy cho mình biết lỗi xảy ra trên trang web hoặc video nào để mình tìm ra nguyên nhân nhanh hơn." data-zh-hant="重新整理一下頁面通常就能恢復。如果還不行，告訴我是在哪個網站或影片上失效的，能幫助我更快找到原因。">刷新一下页面通常就能恢复。如果还不行，告诉我是在哪个网站或视频上失效的，能帮助我更快找到原因。</div>
             <input class="follow-up" type="text" maxlength="200" autocomplete="off"
                    placeholder="在哪个网站或视频上？（可选）"
-                   data-en-placeholder="Which site or video? (optional)" />
+                   data-zh-hant-placeholder="在哪個網站或影片上？（選填）"
+                   data-en-placeholder="Which site or video? (optional)"
+                   data-ja-placeholder="どのサイト・動画で？（任意）" data-vi-placeholder="Trang web hoặc video nào? (không bắt buộc)" />
           </div>
 
           <label class="choice">
             <input type="radio" name="reason" value="quality" />
-            <span data-en="The translation or subtitles weren't good enough<small>Out of sync, poor translation, in the way of the picture…</small>">翻译或字幕效果不好<small>不同步、翻得差、挡住画面……</small></span>
+            <span data-en="The translation or subtitles weren't good enough<small>Out of sync, poor translation, in the way of the picture…</small>" data-ja="翻訳や字幕の質が十分でなかった&lt;small&gt;タイミングがずれる、翻訳が不自然、映像の邪魔になる…&lt;/small&gt;" data-vi="Bản dịch hoặc phụ đề chưa đủ tốt&lt;small&gt;Lệch thời gian, dịch chưa tốt, che mất hình…&lt;/small&gt;" data-zh-hant="翻譯或字幕效果不好&lt;small&gt;不同步、翻得差、擋住畫面……&lt;/small&gt;">翻译或字幕效果不好<small>不同步、翻得差、挡住画面……</small></span>
           </label>
 
           <label class="choice">
             <input type="radio" name="reason" value="site" />
-            <span data-en="It doesn't support the site I watch on">不支持我要用的网站</span>
+            <span data-en="It doesn't support the site I watch on" data-ja="使いたいサイトに対応していない" data-vi="Không hỗ trợ trang web tôi hay xem" data-zh-hant="不支援我要用的網站">不支持我要用的网站</span>
           </label>
           <div class="under" data-for="site" hidden>
             <input class="follow-up" type="text" maxlength="200" autocomplete="off"
                    placeholder="哪个网站？比如 Netflix、Coursera（可选）"
-                   data-en-placeholder="Which site? Netflix, Coursera… (optional)" />
+                   data-zh-hant-placeholder="哪個網站？比如 Netflix、Coursera（選填）"
+                   data-en-placeholder="Which site? Netflix, Coursera… (optional)"
+                   data-ja-placeholder="どのサイト？ Netflix、Coursera など（任意）" data-vi-placeholder="Trang nào? Netflix, Coursera… (không bắt buộc)" />
           </div>
 
           <label class="choice">
             <input type="radio" name="reason" value="better" />
-            <span data-en="I found a better dual-subtitle extension">找到了更好用的双语字幕插件</span>
+            <span data-en="I found a better dual-subtitle extension" data-ja="もっと良い二重字幕の拡張機能を見つけた" data-vi="Đã tìm được tiện ích phụ đề song ngữ tốt hơn" data-zh-hant="找到了更好用的雙語字幕擴充功能">找到了更好用的双语字幕插件</span>
           </label>
           <div class="under" data-for="better" hidden>
             <input class="follow-up" type="text" maxlength="200" autocomplete="off"
                    placeholder="是哪一个？（可选）"
-                   data-en-placeholder="Which one? (optional)" />
+                   data-zh-hant-placeholder="是哪一個？（選填）"
+                   data-en-placeholder="Which one? (optional)"
+                   data-ja-placeholder="どれですか？（任意）" data-vi-placeholder="Tiện ích nào? (không bắt buộc)" />
           </div>
 
           <label class="choice">
             <input type="radio" name="reason" value="other" />
-            <span data-en="Something else">其他原因</span>
+            <span data-en="Something else" data-ja="その他" data-vi="Lý do khác" data-zh-hant="其他原因">其他原因</span>
           </label>
         </fieldset>
 
-        <label class="notes" for="notes" data-en="Anything else you'd like to say? (optional)">还有什么想说的吗？（可选）</label>
+        <label class="notes" for="notes" data-en="Anything else you'd like to say? (optional)" data-ja="ほかに伝えたいことはありますか？（任意）" data-vi="Bạn còn muốn nói gì thêm không? (không bắt buộc)" data-zh-hant="還有什麼想說的嗎？（選填）">还有什么想说的吗？（可选）</label>
         <textarea id="notes" name="notes" maxlength="2000"
                   placeholder="比如是哪个视频出了问题，或者希望加什么功能"
-                  data-en-placeholder="A video that went wrong, or something you wish it did"></textarea>
+                   data-zh-hant-placeholder="比如是哪個影片出了問題，或者希望加什麼功能"
+                  data-en-placeholder="A video that went wrong, or something you wish it did"
+                   data-ja-placeholder="うまくいかなかった動画や、ほしい機能など" data-vi-placeholder="Ví dụ video bị lỗi, hoặc tính năng bạn mong muốn"></textarea>
 
         <div class="actions">
-          <button class="send" id="send" type="submit" disabled data-en="Send">发送</button>
+          <button class="send" id="send" type="submit" disabled data-en="Send" data-ja="送信" data-vi="Gửi" data-zh-hant="傳送">发送</button>
           <span class="status" id="status" role="status"></span>
         </div>
       </form>
 
       <section class="done" id="done" hidden>
-        <h2 data-en="Got it — thank you.">收到了，谢谢你。</h2>
-        <p data-en='Changed your mind? <a href="https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf?utm_source=uninstall&amp;utm_medium=thanks" target="_blank" rel="noopener">Reinstall HappySubs</a>'>改主意了？<a href="https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf?utm_source=uninstall&amp;utm_medium=thanks" target="_blank" rel="noopener">重新安装 HappySubs</a></p>
+        <h2 data-en="Got it — thank you." data-ja="受け取りました。ありがとうございます。" data-vi="Đã nhận — cảm ơn bạn." data-zh-hant="收到了，謝謝你。">收到了，谢谢你。</h2>
+        <p data-en='Changed your mind? <a href="https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf?utm_source=uninstall&amp;utm_medium=thanks" target="_blank" rel="noopener">Reinstall HappySubs</a>' data-ja="やっぱり使いたくなったら？ &lt;a href=&quot;https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf?utm_source=uninstall&amp;utm_medium=thanks&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;HappySubs を再インストール&lt;/a&gt;" data-vi="Đổi ý rồi? &lt;a href=&quot;https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf?utm_source=uninstall&amp;utm_medium=thanks&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;Cài lại HappySubs&lt;/a&gt;" data-zh-hant="改主意了？&lt;a href=&quot;https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf?utm_source=uninstall&amp;amp;utm_medium=thanks&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;重新安裝 HappySubs&lt;/a&gt;">改主意了？<a href="https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf?utm_source=uninstall&amp;utm_medium=thanks" target="_blank" rel="noopener">重新安装 HappySubs</a></p>
       </section>
 
       <section class="fallback" id="fallback" hidden>
-        <p data-en='The feedback form isn&#39;t open right now. If you have a minute, <a href="https://github.com/huanshuowang/happysubs/issues/new" target="_blank" rel="noopener">leave a note on GitHub</a> instead.'>反馈表暂时没开。有空的话，可以<a href="https://github.com/huanshuowang/happysubs/issues/new" target="_blank" rel="noopener">在 GitHub 上留言</a>。</p>
+        <p data-en='The feedback form isn&#39;t open right now. If you have a minute, <a href="https://github.com/huanshuowang/happysubs/issues/new" target="_blank" rel="noopener">leave a note on GitHub</a> instead.' data-ja="フィードバックフォームは現在受け付けていません。お時間があれば、&lt;a href=&quot;https://github.com/huanshuowang/happysubs/issues/new&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;GitHub にメモを残して&lt;/a&gt;ください。" data-vi="Biểu mẫu góp ý hiện chưa mở. Nếu có thời gian, bạn có thể &lt;a href=&quot;https://github.com/huanshuowang/happysubs/issues/new&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;để lại lời nhắn trên GitHub&lt;/a&gt;." data-zh-hant="回饋表單暫時沒開。有空的話，可以&lt;a href=&quot;https://github.com/huanshuowang/happysubs/issues/new&quot; target=&quot;_blank&quot; rel=&quot;noopener&quot;&gt;在 GitHub 上留言&lt;/a&gt;。">反馈表暂时没开。有空的话，可以<a href="https://github.com/huanshuowang/happysubs/issues/new" target="_blank" rel="noopener">在 GitHub 上留言</a>。</p>
       </section>
     </main>
   </div>
@@ -241,7 +259,7 @@
       which: "entry.372882796",     // 具体是哪个 (the site, video or extension, when asked)
       notes: "entry.1694125152",    // 补充说明
       version: "entry.186220609",   // 插件版本, from ?v= on this page's URL
-      lang: "entry.1675081698"      // 界面语言, zh | en, whichever the page was showing
+      lang: "entry.1675081698"      // 界面语言: en | zh | zh-Hant | ja | vi, whichever the page was showing
     };
     const REASON_LABELS = {
       "not-needed": "不再需要了",
@@ -259,40 +277,52 @@
     // The extension says which language its panel was in (?lang=), and that
     // wins: the person was reading HappySubs in it a moment ago. Otherwise the
     // site's own remembered choice, and failing that the browser's language.
+    const PAGE_LANGS = ["en", "zh", "zh-Hant", "ja", "vi"];
+    // The data-* name each language's text is kept under ("zh-Hant" → data-zh-hant).
+    const dsKey = (lang) => lang === "zh-Hant" ? "zhHant" : lang;
+    const pageLang = () => document.documentElement.dataset.lang || "en";
     (function () {
+      // Shared with the rest of the site, which has Chinese and English only,
+      // so only those two are ever written to it.
       const STORAGE_KEY = "yds-site-lang";
-      const TITLES = { zh: "HappySubs 已卸载", en: "HappySubs has been removed" };
-      const TOGGLE_LABEL = { zh: "EN", en: "中" };
+      const TITLES = { zh: "HappySubs 已卸载", "zh-Hant": "HappySubs 已移除", en: "HappySubs has been removed",
+                       ja: "HappySubs をアンインストールしました", vi: "Đã gỡ cài đặt HappySubs" };
+      const HTML_LANG = { zh: "zh-Hans", "zh-Hant": "zh-Hant", en: "en", ja: "ja", vi: "vi" };
       const nodes = Array.from(document.querySelectorAll("[data-en]"));
       nodes.forEach(n => { n.dataset.zh = n.innerHTML; });
       const placeholders = Array.from(document.querySelectorAll("[data-en-placeholder]"));
       placeholders.forEach(n => { n.dataset.zhPlaceholder = n.getAttribute("placeholder") || ""; });
-      const toggleBtn = document.getElementById("langToggle");
+      const select = document.getElementById("langToggle");
 
       function apply(lang) {
-        const key = lang === "en" ? "en" : "zh";
+        const key = PAGE_LANGS.includes(lang) ? lang : "en";
         nodes.forEach(n => {
-          const html = key === "en" ? n.dataset.en : n.dataset.zh;
+          const html = n.dataset[dsKey(key)] ?? n.dataset.en;
           if (html != null) n.innerHTML = html;
         });
         placeholders.forEach(n => {
-          n.setAttribute("placeholder", key === "en" ? n.dataset.enPlaceholder : n.dataset.zhPlaceholder);
+          n.setAttribute("placeholder", n.dataset[dsKey(key) + "Placeholder"] ?? n.dataset.enPlaceholder);
         });
-        document.documentElement.lang = key === "en" ? "en" : "zh-Hans";
+        document.documentElement.lang = HTML_LANG[key];
+        document.documentElement.dataset.lang = key;
         document.title = TITLES[key];
-        toggleBtn.textContent = TOGGLE_LABEL[key];
-        toggleBtn.setAttribute("aria-label", key === "en" ? "切换到中文" : "Switch to English");
+        select.value = key;
       }
 
       const fromExtension = params.get("lang");
       let saved = null;
       try { saved = localStorage.getItem(STORAGE_KEY); } catch {}
-      apply(fromExtension === "zh" || fromExtension === "en" ? fromExtension
-            : saved || (/^zh/i.test(navigator.language || "") ? "zh" : "en"));
+      const nav = String(navigator.language || "").toLowerCase();
+      const browser = nav.startsWith("zh") ? (/tw|hk|mo|hant/.test(nav) ? "zh-Hant" : "zh") : nav.split(/[-_]/)[0];
+      apply(PAGE_LANGS.includes(fromExtension) ? fromExtension
+            : PAGE_LANGS.includes(saved) ? saved
+            : PAGE_LANGS.includes(browser) ? browser : "en");
 
-      toggleBtn.addEventListener("click", () => {
-        const next = document.documentElement.lang.startsWith("zh") ? "en" : "zh";
-        try { localStorage.setItem(STORAGE_KEY, next); } catch {}
+      select.addEventListener("change", () => {
+        const next = select.value;
+        if (next === "zh" || next === "en") {
+          try { localStorage.setItem(STORAGE_KEY, next); } catch {}
+        }
         apply(next);
       });
     })();
@@ -328,7 +358,10 @@
         e.preventDefault();
         const reason = picked();
         if (!reason) return;
-        const zh = document.documentElement.lang.startsWith("zh");
+        const lang = pageLang();
+        const SENDING = { zh: "发送中…", "zh-Hant": "傳送中…", en: "Sending…", ja: "送信中…", vi: "Đang gửi…" };
+        const FAILED = { zh: "没发出去，再试一次？", "zh-Hant": "沒有送出，再試一次？", en: "That didn't go through. Try again?",
+                         ja: "送信できませんでした。もう一度お試しください。", vi: "Chưa gửi được. Thử lại nhé?" };
         // Only the box under the chosen answer counts; one typed into and then
         // abandoned for a different answer is not about that answer.
         const followUp = form.querySelector(`.under[data-for="${reason.value}"] .follow-up`);
@@ -337,9 +370,9 @@
         if (FORM.which) body.set(FORM.which, followUp ? followUp.value.trim() : "");
         if (FORM.notes) body.set(FORM.notes, document.getElementById("notes").value.trim());
         if (FORM.version) body.set(FORM.version, version);
-        if (FORM.lang) body.set(FORM.lang, zh ? "zh" : "en");
+        if (FORM.lang) body.set(FORM.lang, lang);
         send.disabled = true;
-        status.textContent = zh ? "发送中…" : "Sending…";
+        status.textContent = SENDING[lang] || SENDING.en;
         try {
           // Google Forms does not answer cross-origin requests, so the response
           // is opaque: getting one at all is the only success there is to see.
@@ -348,7 +381,7 @@
           document.getElementById("done").hidden = false;
         } catch {
           send.disabled = false;
-          status.textContent = zh ? "没发出去，再试一次？" : "That didn't go through. Try again?";
+          status.textContent = FAILED[lang] || FAILED.en;
         }
       });
     })();

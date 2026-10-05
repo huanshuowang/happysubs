@@ -56,13 +56,30 @@ const settle = (ms) => new Promise(r => setTimeout(r, ms));
         document.getElementById("demoTr").textContent === "両方の言語が見えると、語学はずっと楽になる。",
         document.getElementById("demoTr").textContent);
 
-  document.getElementById("langToggle").click();
+  const pageLang = document.getElementById("pageLang");
+  pageLang.value = "zh";
+  pageLang.dispatchEvent(new Event("change", { bubbles: true }));
   await settle(50);
   check("switching the page to Chinese keeps the choice", select.value === "ja", select.value);
   check("…and retitles the groups", select.querySelector("optgroup").label === "常用",
         select.querySelector("optgroup").label);
   check("…and the label", document.querySelector("label[for=secondLang]").textContent === "字幕翻译成",
         document.querySelector("label[for=secondLang]").textContent);
+
+  // Traditional Chinese, Japanese and Vietnamese pages, end to end: their own strings, and the
+  // panel language saved with them.
+  for (const [lang, pick, step1] of [["zh-Hant", "字幕翻譯成", "固定到工具列"], ["ja", "字幕の翻訳先", "ツールバーに固定"], ["vi", "Dịch phụ đề sang", "Ghim lên thanh công cụ"]]) {
+    pageLang.value = lang;
+    pageLang.dispatchEvent(new Event("change", { bubbles: true }));
+    await settle(50);
+    check(`the page in ${lang}`,
+          document.documentElement.lang === lang
+          && document.querySelector("label[for=secondLang]").textContent === pick
+          && document.querySelector('[data-t="step1Title"]').textContent === step1
+          && STORE.ydsSettings.uiLang === lang,
+          `${document.documentElement.lang} · ${document.querySelector("label[for=secondLang]").textContent} · uiLang=${STORE.ydsSettings.uiLang}`);
+  }
+  check("…and the second language survives every switch", select.value === "ja", select.value);
 
   const pass = results.filter(r => r.p).length;
   document.getElementById("out").textContent =

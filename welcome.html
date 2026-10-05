@@ -54,13 +54,18 @@
 
     header { height: 68px; display: flex; align-items: center; justify-content: space-between; }
     /* The site's language switch, same shape and place. */
-    .lang-toggle {
-      background: transparent; color: var(--text-dim);
+    /* The page's language, in the place the site keeps its switch. A select
+       now rather than a two-way button: there are four to choose from. */
+    .lang-select {
+      -webkit-appearance: none; appearance: none;
+      color: var(--text-dim);
+      background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23a3a3a3' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 11px center / 9px 6px;
       border: 1px solid var(--border-control); border-radius: 999px;
-      padding: 5px 12px; font: inherit; font-size: 13px; cursor: pointer;
+      padding: 5px 28px 5px 12px; font: inherit; font-size: 13px; cursor: pointer;
     }
-    .lang-toggle:hover { color: var(--text); background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.55); }
-    .lang-toggle:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 3px; }
+    .lang-select:hover { color: var(--text); background-color: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.55); }
+    .lang-select:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 3px; }
+    .lang-select option { color: #111; }
     .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; color: var(--text); }
     .brand svg { width: 24px; height: 24px; color: var(--brand); }
 
@@ -413,7 +418,13 @@
         </g></svg>
         HappySubs
       </span>
-      <button class="lang-toggle" id="langToggle" type="button" aria-label="切换到中文">中</button>
+      <select class="lang-select" id="pageLang" aria-label="Language">
+        <option value="en">English</option>
+        <option value="zh">简体中文</option>
+        <option value="zh-Hant">繁體中文</option>
+        <option value="ja">日本語</option>
+        <option value="vi">Tiếng Việt</option>
+      </select>
     </header>
 
     <main>

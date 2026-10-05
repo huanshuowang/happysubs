@@ -140,10 +140,23 @@ const loadScript = (src) => new Promise((res, rej) => {
   window.__shortcut = undefined;
   await renderShortcutHint();
 
-  const expected = UI_LANG === "zh"
-    ? { enable: "启用", only: "仅显示翻译字幕（不用开原生字幕）" }
-    : { enable: "Enable", only: "Translation only (no need to turn on captions)" };
+  const expected = {
+    zh: { enable: "启用", only: "仅显示翻译字幕（不用开原生字幕）" },
+    "zh-Hant": { enable: "啟用", only: "僅顯示翻譯字幕（不用開原生字幕）" },
+    ja: { enable: "有効にする", only: "訳文のみ表示（字幕をオンにしなくてOK）" },
+    vi: { enable: "Bật", only: "Chỉ hiện bản dịch (không cần bật phụ đề)" }
+  }[UI_LANG] || { enable: "Enable", only: "Translation only (no need to turn on captions)" };
   check(`uiLang=${UI_LANG}: Enable label`, label("enable") === expected.enable, JSON.stringify(label("enable")));
+
+  // "Follow the browser": which panel language each browser gets.
+  const uiFor = (ui) => {
+    const real = chrome.i18n.getUILanguage;
+    chrome.i18n.getUILanguage = () => ui;
+    try { return ydsSetUiLang("auto"); } finally { chrome.i18n.getUILanguage = real; ydsSetUiLang(UI_LANG); }
+  };
+  const followed = ["zh-TW", "zh-HK", "zh-CN", "zh", "ja", "vi-VN", "fr", "en-GB"].map(uiFor);
+  check("the panel follows the browser: Taiwan and Hong Kong read Traditional, mainland Simplified, others their own or English",
+        followed.join() === "zh-Hant,zh-Hant,zh,zh,ja,vi,en,en", followed.join());
   check(`uiLang=${UI_LANG}: translation-only label`, label("translationOnly") === expected.only,
         JSON.stringify(label("translationOnly")));
 
@@ -561,7 +574,7 @@ const loadScript = (src) => new Promise((res, rej) => {
       translationStatus: {}, live: { active: true, status: "listening" } },
     { id: 1 });
   check("status line reflects live transcription while it runs",
-        /实时听译进行中|Live transcription is running/.test(liveStatus),
+        liveStatus.includes(ydsT("statusLiveRunning")),
         JSON.stringify(liveStatus.slice(0, 40)));
 
   const pass = results.filter(r => r.p).length;
