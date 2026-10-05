@@ -36,3 +36,6 @@ STORE-SUBMISSION.md
 promo/build/
 # The master is over GitHub's 100 MB file limit; the videos are outputs, not source.
 promo/*.mp4
+# The vertical cuts and their covers stay local; only the 16:9 film is published.
+promo/vertical.html
+promo/*-cover.jpg

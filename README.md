@@ -1,29 +1,38 @@
 # HappySubs — YouTube / Vimeo / B站 双语字幕
 
-> v2.0.0 · 在 **YouTube**、**Vimeo**、**B站** 上同时显示两种语言的字幕；没有字幕的视频还能**实时听译**。使用自带字幕或Google免费翻译，支持使用Claude / OpenAI / Gemini / DeepSeek 翻译。
+[![Chrome Web Store](https://img.shields.io/chrome-web-store/v/malocefbdblplamcmmmpilepcgllfmnf?label=Chrome%20Web%20Store&color=ff0033)](https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf?utm_source=github&utm_medium=readme) [![用户](https://img.shields.io/chrome-web-store/users/malocefbdblplamcmmmpilepcgllfmnf?label=users&color=ff0033)](https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf?utm_source=github&utm_medium=readme) [![评分](https://img.shields.io/chrome-web-store/rating/malocefbdblplamcmmmpilepcgllfmnf?label=rating&color=ff0033)](https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf?utm_source=github&utm_medium=readme) [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-**📖 项目主页：** https://huanshuowang.com/happysubs/
-**🎙️ 实时听译安装说明：** https://huanshuowang.com/happysubs/#live
-**🔒 隐私政策：** https://huanshuowang.github.io/happysubs/privacy.html
+> 在 **YouTube**、**Vimeo**、**B站** 上同时显示两种语言的字幕；没有字幕的视频还能**实时听译**。使用自带字幕或 Google 免费翻译，也可以用 Claude / OpenAI / Gemini / DeepSeek 翻译。
+
+![同一句台词，每一拍换一种第二语言；插件弹窗里的「第二语言」跟着切换](docs/media/readme-languages.gif)
+
+<sub>动图截自 30 秒介绍片，完整版在[项目主页](https://huanshuowang.com/happysubs/)。</sub>
+
+- **📖 项目主页：** https://huanshuowang.com/happysubs/
+- **🎙️ 实时听译安装说明：** https://huanshuowang.com/happysubs/#live
+- **🔒 隐私政策：** https://huanshuowang.github.io/happysubs/privacy.html
 
 ---
 
 ## ✨ 特点
 
+- **🪶 双语合成一条字幕**：原文和译文两行一起出现、一起换，一句一次；自动生成字幕也不再逐字滚动，换成整理好的整句
 - **⚡ 零延迟同步**：拿到整条字幕轨后提前翻译，跟视频时间轴精确对齐
 - **🎯 整句翻译**：合并 ASR 把一句话切成两半的碎片再翻译，比同类扩展效果更好
 - **🎬 三个平台**：YouTube、Vimeo（含嵌在别处的播放器）、B站
 - **🎙️ 实时听译**：给完全没有字幕的视频用（B站上很常见）。抓视频音频，边播边转字幕再翻译。识别在你自己电脑上跑，**音频不出本机**，也没有按分钟计费
 - **👁️ 仅翻译模式**：默认跟随播放器——不开原生字幕就不显示翻译。想只看译文的话，在插件弹窗里打开「仅显示翻译字幕」，关着 CC 也能单独显示第二语言
 - **🖱️ 悬停拖动字幕位置**：鼠标碰到字幕就浮出拖拽把手，全屏也能调
+- **⬇️ 导出字幕**：把正在看的字幕存成 .srt，可选双语、仅原文或仅译文，文件名带视频名、频道名和语言
+- **⌨️ 一键开关**：Mac 上 ⌘⇧S，Windows / Linux 上 Alt+Shift+S，不用打开弹窗就能在原文和双语之间切换
 - **🌍 100+ 种语言**：Google Translate 支持的目标语言都能选
-- **🔐 免费可用 · AI 增强可选**：使用视频自带字幕或 Google 免费翻译。需要更高精度时，可选 Claude / OpenAI / Gemini / DeepSeek 增强翻译，并且只会在你确认后调用 API
-- **🎨 样式可调**：字号、颜色、背景透明度、垂直位置随你调；另有**字幕宽度**百分比，在没有原生字幕可对齐时（实时听译、仅翻译模式）生效——画面左右有黑边时调小，字幕就只落在画面里
-- **⚙️ 设置页**：面板语言（跟随浏览器 / 中文 / English）和默认行为，在 `chrome://extensions` → 详细信息 → 扩展程序选项里
+- **🔐 免费可用 · AI 增强可选**：使用视频自带字幕或 Google 免费翻译。需要更高精度时，可选 Claude / OpenAI / Gemini / DeepSeek 增强翻译，可以挑具体模型或自己填模型名，翻译进度显示在视频上方；付费 API 怎么调用由你定（每次询问 / 总是使用 / 只在点按钮时）
+- **🎨 样式可调**：字号、颜色、背景透明度、垂直位置随你调，**原文和译文可以分开设置**，也能锁成同一套；另有**字幕宽度**百分比，在没有原生字幕可对齐时（实时听译、仅翻译模式）生效——画面左右有黑边时调小，字幕就只落在画面里
+- **⚙️ 设置**：弹窗右上角的齿轮里，是字幕外观和面板语言（跟随浏览器 / 中文 / English）
 
 ## 📦 安装
 
-**从 Chrome 应用商店安装**（推荐）：[HappySubs](https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf)
+**从 Chrome 应用商店安装**（推荐）：[HappySubs](https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf?utm_source=github&utm_medium=readme)
 
 想从源码装的话：clone 本仓库 → `chrome://extensions` 开启 **Developer mode** → **Load unpacked** 选仓库根目录。
 
@@ -42,13 +51,14 @@
   - 万一没取到，弹窗会提示你：在播放器里点一下 CC 再关掉即可。扩展会留着这份字幕，之后单独显示译文
 - 如果选择 Claude / OpenAI / Gemini / DeepSeek，需要先填写 API Key，然后点击 **本视频使用所选 API 翻译** 才会调用
 - 鼠标碰字幕 → 上方浮出 ↕ 小方块 → 按住拖动调位置
-- 弹窗里可以改：第二语言、翻译源、API Key、垂直位置、字号、颜色、背景透明度
+- 弹窗首页：开关、第二语言、翻译源、API Key、字幕样式、导出字幕；字号、颜色、背景透明度、垂直位置在右上角齿轮里
+- ⌘⇧S（Windows / Linux 上 Alt+Shift+S）随时开关第二语言
 
 ## 🔧 工作原理
 
 平台相关的代码全在 `platform.js` 里，`content.js` 只做与平台无关的事：合并碎句、五个翻译源、付费 API 确认、叠加层渲染与拖拽。适配器只需要回答四个问题——`<video>` 在哪、叠加层挂在哪、有哪些字幕轨、把某条轨的 cue 给我。
 
-两个平台拿字幕的方式正好相反：
+YouTube 和 Vimeo 拿字幕的方式正好相反，B站 又是第三种：
 
 **YouTube（被动拦截）**
 
@@ -65,11 +75,19 @@
 3. `inject-vimeo.js` 额外读一份 `playerConfig.request.text_tracks`——那是全量轨道列表（只在 `player.vimeo.com` 上有）
 4. 万一签名过期，退回到 `video.textTracks`，让浏览器自己解析
 
-拿到 cue 之后两边走同一条路：合并被切碎的句子 → 整片批量翻译 → 用 `requestAnimationFrame` 跟着 `video.currentTime` 渲染到叠加层。
+**B站（走自家 API）**
+
+1. 用视频的 `bvid` 请求 `api.bilibili.com/x/web-interface/view`，拿到这一 P 的 `cid`
+2. 再请求 `api.bilibili.com/x/player/v2`，得到字幕轨列表和每条轨的字幕文件地址；`ai-` 开头的是 AI 生成字幕，人工字幕优先
+3. B站 只对登录用户返回字幕列表——没登录时会显示"没有字幕"，真没有字幕的视频就用下面的实时听译
+
+拿到 cue 之后三个平台走同一条路：合并被切碎的句子 → 整片批量翻译 → 用 `requestAnimationFrame` 跟着 `video.currentTime` 渲染到叠加层。
 
 ## 🎙️ 实时听译
 
 给没有字幕轨的视频用。扩展抓取播放器音频送到**本地识别服务**，识别结果实时叠在画面上（上行原文、下行译文）。
+
+![实时听译：边播边识别，识别中的字会随上下文修正](docs/media/readme-live.gif)
 
 三个平台都能用（音频抓取在 YouTube 上实测可行），但主要是给 B站——那里大部分视频没有字幕轨。
 
@@ -93,7 +111,7 @@ cd happysubs-server && .venv/bin/python server.py
 
 看到 `监听 ws://127.0.0.1:8765` 就绪。然后在插件弹窗切到「实时听译」标签，点开启。
 
-模型和虚拟环境都不进 git——**这个仓库里跟踪的内容只有 508KB**，服务端源码一共 16KB（`server.py` + `requirements.txt` + `setup.sh`）。那 193MB 模型是安装时从 sherpa-onnx 官方 release 下的，不占本项目的仓库和带宽。
+模型和虚拟环境都不进 git——服务端源码一共 16KB（`server.py` + `requirements.txt` + `setup.sh`），那 193MB 模型是安装时从 sherpa-onnx 官方 release 下的，不占本项目的仓库和带宽。
 
 ### 注意
 
@@ -133,7 +151,7 @@ cd happysubs-server && .venv/bin/python server.py
 
 ## 🧪 测试
 
-`test/` 下有两个跑在浏览器里的测试页，不需要装扩展也不需要 node：
+`test/` 下是一组跑在浏览器里的测试页，不需要装扩展也不需要 node：
 
 ```bash
 python3 -m http.server 8794
@@ -142,6 +160,30 @@ python3 -m http.server 8794
 详见 [test/README.md](test/README.md)。
 
 ## 📝 更新日志
+
+### 2.1.2
+
+- 换句时字幕不再闪一下，暂停时也不再压住控制栏
+- 新装的用户会先看到一页上手说明
+
+### 2.1.1
+
+- 修好了付费 AI 翻译不弹确认、换翻译源后按钮失灵的问题
+- 翻译源的报错改成了一句看得懂的话
+
+### 2.1.0
+
+- **双语合成一条字幕**：两行一起出现、一起换，一句一次；自动生成字幕不再逐字滚动，换成整理好的整句
+- 原文和译文的字号、颜色、背景透明度可以分开调，也能一个开关锁成同一套
+- 新增 .srt 导出（双语 / 仅原文 / 仅译文）和 ⌘⇧S（Windows / Linux 上 Alt+Shift+S）快捷开关
+- 界面重新设计；设置分了主次，常用的留在弹窗首页，字幕外观和面板语言在齿轮里，单独的设置页取消
+- AI 翻译可以选模型或自己填；翻译进度显示在视频上方
+- 付费 API 的调用方式三选一：每次询问、总是使用、只在点按钮时
+- 修复：开头有贴片广告的视频没有字幕等问题
+
+### 2.0.1
+
+- 长视频后半段不再只剩原文：免费翻译被限流时自己放慢而不是直接断掉，真翻不出来会在字幕上说一声
 
 ### 2.0.0
 
