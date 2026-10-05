@@ -94,6 +94,7 @@ const loadScript = (src) => new Promise((res, rej) => {
   document.head.appendChild(styleEl);
   document.getElementById("mount").append(...parsed.body.childNodes);
   await loadScript("../i18n.js");
+  await loadScript("../languages.js");
   await loadScript("../popup.js");
   await new Promise(r => setTimeout(r, 600));
 

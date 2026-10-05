@@ -79,7 +79,7 @@
       column-gap: 48px;
       align-content: center;
       min-height: calc(100vh - 68px);
-      padding: 8px 0 48px;
+      padding: 0 0 36px;
     }
     .head { grid-area: head; align-self: end; }
     .eyebrow {
@@ -100,15 +100,67 @@
     h1 em { font-style: normal; color: var(--brand-2); white-space: nowrap; }
     .lede { color: var(--text-dim); font-size: 15.5px; margin: 0; max-width: 34em; }
 
+    /* The second language, chosen on the first screen rather than found in the
+       popup later. English browsers start on Chinese (see ydsDefaultSecondLang),
+       and someone who does not read it, meeting it on their first video, is
+       the quickest uninstall there is. */
+    .pick {
+      position: relative;
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      margin: 16px 0 0; padding: 11px 12px 11px 14px;
+      max-width: 34em;
+      background: linear-gradient(135deg, rgba(255,0,51,0.16), rgba(255,0,51,0.05));
+      border: 1px solid rgba(255,0,51,0.55);
+      border-radius: 13px;
+      box-shadow: 0 0 0 4px rgba(255,0,51,0.06), 0 10px 30px rgba(255,0,51,0.12);
+      /* Two soft pulses once the page is up, to draw the eye here first. */
+      animation: pick-glow 1.3s ease-in-out 0.8s 2;
+    }
+    @keyframes pick-glow {
+      0%, 100% { box-shadow: 0 0 0 4px rgba(255,0,51,0.06), 0 10px 30px rgba(255,0,51,0.12); }
+      50%      { box-shadow: 0 0 0 7px rgba(255,0,51,0.20), 0 10px 34px rgba(255,0,51,0.30); }
+    }
+    .pick label {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 15.5px; font-weight: 700; color: #fff; white-space: nowrap;
+    }
+    .pick label svg { width: 20px; height: 20px; color: var(--brand-2); flex: none; }
+    .pick select {
+      flex: 1 1 200px; min-width: 0;
+      -webkit-appearance: none; appearance: none;
+      padding: 9px 36px 9px 13px;
+      font: inherit; font-size: 16px; font-weight: 600; color: var(--text);
+      background: #0f0f0f url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23f5f5f5' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 13px center / 11px 7px;
+      border: 1px solid rgba(255,255,255,0.45); border-radius: 9px;
+      cursor: pointer;
+    }
+    .pick select:hover { border-color: rgba(255,255,255,0.75); }
+    .pick select:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+    /* Sits on the box's top edge rather than inside it: in the box it took a
+       place of its own even while invisible, and on a narrow row that place
+       wrapped onto a second, empty-looking line. */
+    .pick-saved {
+      position: absolute; top: -11px; right: 14px;
+      padding: 1px 9px; border-radius: 999px;
+      background: var(--bg); border: 1px solid rgba(61,220,132,0.5);
+      color: #3ddc84; font-size: 12px; font-weight: 600; line-height: 18px;
+      opacity: 0; transition: opacity 0.2s;
+      pointer-events: none;
+    }
+    .pick-saved.on { opacity: 1; }
+    @media (prefers-reduced-motion: reduce) {
+      .pick { animation: none; }
+    }
+
     /* The steps light up as the demo reaches them. Each one's --on runs from 0
        to 1 on the demo's clock; everything that marks a step as current is
        mixed by it, so they ease in and out together. */
-    .steps { grid-area: steps; list-style: none; margin: 26px 0 0; padding: 0; display: grid; gap: 4px; }
+    .steps { grid-area: steps; list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 2px; }
     .step {
       display: grid;
       grid-template-columns: 30px minmax(0, 1fr);
       column-gap: 14px;
-      padding: 11px 14px 12px;
+      padding: 8px 14px 9px;
       margin-left: -14px;
       border-radius: 12px;
       border: 1px solid rgba(255,0,51, calc(0.42 * var(--on)));
@@ -132,7 +184,7 @@
     .step p { grid-column: 2; margin: 0; color: var(--text-dim); font-size: 14px; line-height: 1.55; }
     .step strong { color: var(--text); font-weight: 600; }
 
-    .cta-block { grid-area: cta; align-self: start; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 26px; }
+    .cta-block { grid-area: cta; align-self: start; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 18px; }
     .cta {
       display: inline-flex; align-items: center;
       background: var(--brand); color: #fff;
@@ -370,6 +422,11 @@
           <div class="eyebrow" data-t="eyebrow">Installed</div>
           <h1 data-html="headline">You're set.<br>On YouTube, <em>turn on CC</em> first.</h1>
           <p class="lede" data-t="lede">HappySubs translates the captions a video already has. On Vimeo and Bilibili there's nothing to switch on.</p>
+          <div class="pick">
+            <label for="secondLang"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0 0 14.07 6H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/></svg><span data-t="pickLabel">Translate subtitles into</span></label>
+            <select id="secondLang"></select>
+            <span class="pick-saved" id="pickSaved" data-t="pickSaved" aria-live="polite">✓ Saved</span>
+          </div>
         </div>
 
         <ol class="steps">
@@ -386,7 +443,7 @@
           <li class="step step-3">
             <span class="num">3</span>
             <h2 data-t="step3Title">Both languages appear</h2>
-            <p data-html="step3Body" id="step3Body">Click the toolbar icon to change the second language.</p>
+            <p data-t="step3Body">Both appear together, one line at a time. Change the language any time from the toolbar icon.</p>
           </li>
         </ol>
 
@@ -457,6 +514,7 @@
   </div>
 
   <script src="i18n.js"></script>
+  <script src="languages.js"></script>
   <script src="welcome.js"></script>
 </body>
 </html>

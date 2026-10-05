@@ -96,6 +96,7 @@ const loadScript = (src) => new Promise((res, rej) => {
   const parsed = new DOMParser().parseFromString(html, "text/html");
   document.getElementById("mount").append(...parsed.body.childNodes);
   await loadScript("../i18n.js");
+  await loadScript("../languages.js");
   await loadScript("../popup.js");
   await settle(700);
 

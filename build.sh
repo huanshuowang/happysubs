@@ -22,7 +22,7 @@ mkdir -p "${STAGE_DIR}/icons"
 
 cp manifest.json i18n.js platform.js live.js content.js background.js \
    inject-youtube.js inject-vimeo.js overlay.css \
-   popup.html popup.js welcome.html welcome.js \
+   popup.html popup.js languages.js welcome.html welcome.js \
    "${STAGE_DIR}/"
 cp icons/icon16.png icons/icon32.png icons/icon48.png icons/icon128.png "${STAGE_DIR}/icons/"
 cp -R _locales "${STAGE_DIR}/_locales"

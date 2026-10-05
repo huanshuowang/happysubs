@@ -1,0 +1,8 @@
+{
+  "appName": {
+    "message": "HappySubs — 이중 자막·자막 번역·실시간 자막 for YouTube™, Vimeo, Bilibili"
+  },
+  "appDesc": {
+    "message": "YouTube·Vimeo·Bilibili 자막을 번역해 두 언어를 한 줄로 함께 표시. 자막 없는 영상은 실시간 자막 생성, .srt 내보내기도 지원."
+  }
+}

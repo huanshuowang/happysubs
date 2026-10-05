@@ -1,0 +1,72 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>YDS welcome page</title>
+<h1>Welcome page: the second-language picker</h1>
+<pre id="out">running…</pre>
+<div id="mount"></div>
+
+<script>
+// The real welcome page and its scripts, against a chrome.* stub. A Korean
+// second language is already stored, so the picker has to show that rather
+// than the browser's default; other settings are there to be left alone.
+const STORE = { ydsSettings: { secondLang: "ko", fontSize: 22, uiLang: "en" } };
+window.chrome = {
+  runtime: { id: "yds-test", getURL: (f) => "/" + f, lastError: null },
+  i18n: { getUILanguage: () => "en-US" },
+  storage: { sync: {
+    get: (k, cb) => setTimeout(() => cb(JSON.parse(JSON.stringify(STORE))), 0),
+    set: (o, cb) => { Object.assign(STORE, JSON.parse(JSON.stringify(o))); cb && cb(); }
+  } }
+};
+const loadScript = (src) => new Promise((resolve, reject) => {
+  const s = document.createElement("script");
+  s.src = src; s.onload = resolve; s.onerror = reject;
+  document.body.appendChild(s);
+});
+const results = [];
+const check = (n, p, d) => results.push({ n, p: !!p, d });
+const settle = (ms) => new Promise(r => setTimeout(r, ms));
+
+(async () => {
+  const html = await (await fetch("../welcome.html?cb=" + Date.now())).text();
+  const parsed = new DOMParser().parseFromString(html, "text/html");
+  parsed.querySelectorAll("script").forEach(s => s.remove());
+  document.getElementById("mount").append(...parsed.body.childNodes);
+  await loadScript("../i18n.js");
+  await loadScript("../languages.js");
+  await loadScript("../welcome.js");
+  await settle(300);
+
+  const select = document.getElementById("secondLang");
+  const groups = [...select.querySelectorAll("optgroup")].map(g => g.label);
+  check("the picker lists the common languages, then all of them",
+        groups.join("|") === "Common|All languages" && select.options.length > 100,
+        `${groups.join("|")} · ${select.options.length} options`);
+  check("…and shows the language already chosen, not the browser's default", select.value === "ko", select.value);
+
+  select.value = "ja";
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+  await settle(50);
+  check("picking a language saves it at once", STORE.ydsSettings.secondLang === "ja",
+        JSON.stringify(STORE.ydsSettings));
+  check("…without touching any other setting", STORE.ydsSettings.fontSize === 22 && STORE.ydsSettings.uiLang === "en",
+        JSON.stringify(STORE.ydsSettings));
+  check("…says it is saved", document.getElementById("pickSaved").classList.contains("on"), "");
+  check("…and the demo switches to that language",
+        document.getElementById("demoTr").textContent === "両方の言語が見えると、語学はずっと楽になる。",
+        document.getElementById("demoTr").textContent);
+
+  document.getElementById("langToggle").click();
+  await settle(50);
+  check("switching the page to Chinese keeps the choice", select.value === "ja", select.value);
+  check("…and retitles the groups", select.querySelector("optgroup").label === "常用",
+        select.querySelector("optgroup").label);
+  check("…and the label", document.querySelector("label[for=secondLang]").textContent === "字幕翻译成",
+        document.querySelector("label[for=secondLang]").textContent);
+
+  const pass = results.filter(r => r.p).length;
+  document.getElementById("out").textContent =
+    results.map(r => `${r.p ? "PASS" : "FAIL"}  ${r.n}${r.d ? "   [" + r.d + "]" : ""}`).join("\n")
+    + `\n\n${pass}/${results.length} passed`;
+})();
+</script>

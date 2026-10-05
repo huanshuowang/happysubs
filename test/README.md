@@ -44,6 +44,12 @@ http://localhost:8794/test/spa-nav.html
 
 http://localhost:8794/test/inline-follow.html
 
+### `test/welcome.html`
+
+引导页的「字幕翻译成」下拉框（9 条）。用真实的 `welcome.html` 和脚本：列表和弹窗一样，先常用、再全部语言（共用 `languages.js`）；显示的是已经保存的语言而不是浏览器默认；选了立即保存、不动其他设置、显示「已保存」、演示动画换成那种语言；切换页面语言后选择还在，分组标题和标签跟着换。
+
+http://localhost:8794/test/welcome.html
+
 ### `test/rate-prompt.html`
 
 评分提示测试（27 条）。只有带双语字幕实际播放满一分钟的视频才算数，然后最多问三次，在不同的地方：

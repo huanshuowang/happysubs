@@ -19,8 +19,9 @@
       step2Title: "Open a video, click CC",
       step2Body: "Bottom right of the player. <strong>Refresh any video page that was already open.</strong>",
       step3Title: "Both languages appear",
-      step3Body: "The second language is <strong>{lang}</strong>. Click the toolbar icon to change it.",
-      step3BodyNoLang: "Click the toolbar icon to change the second language.",
+      step3Body: "Both appear together, one line at a time. Change the language any time from the toolbar icon.",
+      pickLabel: "Translate subtitles into",
+      pickSaved: "✓ Saved",
       tryIt: "Try it on a video",
       tryNote: "A TED talk with human-made captions",
       tipsTitle: "Worth knowing",
@@ -45,8 +46,9 @@
       step2Title: "打开视频，点 CC",
       step2Body: "在播放器右下角。<strong>安装前就开着的视频页，要先刷新一次。</strong>",
       step3Title: "双语字幕出现",
-      step3Body: "第二语言是<strong>{lang}</strong>，点工具栏图标可以换。",
-      step3BodyNoLang: "点工具栏图标可以换第二语言。",
+      step3Body: "原文和译文合成一条，一句一换。以后想换语言，点工具栏图标就行。",
+      pickLabel: "字幕翻译成",
+      pickSaved: "✓ 已保存",
       tryIt: "打开一个视频试试",
       tryNote: "一个带人工字幕的 TED 演讲",
       tipsTitle: "几个顺手的功能",
@@ -87,13 +89,6 @@
     return [ORIGINAL, DEMO_LINES[key] || DEMO_LINES["zh-Hans"]];
   }
 
-  function languageName(code, uiLang) {
-    try {
-      const names = new Intl.DisplayNames([uiLang === "zh" ? "zh-Hans" : "en"], { type: "language" });
-      return names.of(code) || "";
-    } catch { return ""; }
-  }
-
   function isMac() {
     const p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "";
     return /mac/i.test(p);
@@ -117,17 +112,11 @@
     for (const el of document.querySelectorAll("[data-html]")) el.innerHTML = t[el.dataset.html];
     for (const el of document.querySelectorAll("[data-aria]")) el.setAttribute("aria-label", t[el.dataset.aria]);
 
-    const name = languageName(secondLang, uiLang);
-    document.getElementById("step3Body").innerHTML = name
-      ? t.step3Body.replace("{lang}", name)
-      : t.step3BodyNoLang;
-
     const key = isMac() ? "<kbd>⌘</kbd> <kbd>⇧</kbd> <kbd>S</kbd>" : "<kbd>Alt</kbd> <kbd>Shift</kbd> <kbd>S</kbd>";
     document.getElementById("tipShortcut").innerHTML = t.tipShortcut.replace("{key}", key);
 
-    const [src, tr] = demoLines(secondLang);
-    document.getElementById("demoSrc").textContent = src;
-    document.getElementById("demoTr").textContent = tr;
+    showDemo(secondLang);
+    buildPicker(document.getElementById("secondLang"), secondLang);
 
     // Names the language it switches to, in that language.
     const toggle = document.getElementById("langToggle");
@@ -135,29 +124,83 @@
     toggle.setAttribute("aria-label", uiLang === "zh" ? "Switch to English" : "切换到中文");
   }
 
-  // The switch here is the panel's own language setting, not just this page's:
-  // someone who flips it on their first screen wants the popup in that
-  // language too, and would otherwise have to find the setting to do it again.
-  function saveUiLang(lang) {
+  function showDemo(secondLang) {
+    const [src, tr] = demoLines(secondLang);
+    document.getElementById("demoSrc").textContent = src;
+    document.getElementById("demoTr").textContent = tr;
+  }
+
+  // The same two lists the popup offers (languages.js): the common languages,
+  // then all of them. Option names are each language's own, so only the group
+  // headings follow the page's language.
+  function buildPicker(select, value) {
+    const T = typeof ydsT === "function" ? ydsT : (k) => k;
+    select.replaceChildren();
+    const seen = new Set();
+    const group = (label, list) => {
+      const g = document.createElement("optgroup");
+      g.label = label;
+      for (const [code, name] of list) {
+        if (seen.has(code)) continue;
+        seen.add(code);
+        const o = document.createElement("option");
+        o.value = code;
+        o.textContent = `${name} (${code})`;
+        g.appendChild(o);
+      }
+      select.appendChild(g);
+    };
+    group(T("groupCommon"), globalThis.YDS_COMMON_LANGS || []);
+    group(T("groupAll"), globalThis.YDS_ALL_LANGS || []);
+    // A language set elsewhere that neither list has (a regional variant
+    // picked from a video's own tracks, say) is still shown as chosen.
+    if (value && !seen.has(value)) {
+      const o = document.createElement("option");
+      o.value = value;
+      o.textContent = value;
+      select.prepend(o);
+    }
+    select.value = value;
+  }
+
+  // Settings written here are the extension's own, merged into what is
+  // stored, so the popup and every open video see them at once.
+  function saveSetting(change) {
     try {
       chrome.storage.sync.get(["ydsSettings"], (r) => {
         const cur = (r && r.ydsSettings) || {};
-        chrome.storage.sync.set({ ydsSettings: { ...cur, uiLang: lang } });
+        chrome.storage.sync.set({ ydsSettings: { ...cur, ...change } });
       });
     } catch {}
   }
 
   storedSettings().then((s) => {
     const uiLang = typeof ydsSetUiLang === "function" ? ydsSetUiLang(s.uiLang) : "en";
-    const secondLang = s.secondLang || (typeof ydsDefaultSecondLang === "function" ? ydsDefaultSecondLang() : "zh-Hans");
+    let secondLang = s.secondLang || (typeof ydsDefaultSecondLang === "function" ? ydsDefaultSecondLang() : "zh-Hans");
     let current = uiLang === "zh" ? "zh" : "en";
     fill(STRINGS[current], current, secondLang);
 
+    // The switch here is the panel's own language setting, not just this
+    // page's: someone who flips it on their first screen wants the popup in
+    // that language too, and would otherwise have to find the setting again.
     document.getElementById("langToggle").addEventListener("click", () => {
       current = current === "zh" ? "en" : "zh";
       if (typeof ydsSetUiLang === "function") ydsSetUiLang(current);
       fill(STRINGS[current], current, secondLang);
-      saveUiLang(current);
+      saveSetting({ uiLang: current });
+    });
+
+    // Saved the moment it is picked: there is no "done" to press, and the
+    // demo beside it switches to the chosen language as proof.
+    let savedTimer = null;
+    document.getElementById("secondLang").addEventListener("change", (e) => {
+      secondLang = e.target.value;
+      saveSetting({ secondLang });
+      showDemo(secondLang);
+      const saved = document.getElementById("pickSaved");
+      saved.classList.add("on");
+      clearTimeout(savedTimer);
+      savedTimer = setTimeout(() => saved.classList.remove("on"), 1800);
     });
   });
 })();

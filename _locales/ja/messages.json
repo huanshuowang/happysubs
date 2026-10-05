@@ -1,0 +1,8 @@
+{
+  "appName": {
+    "message": "HappySubs — 二重字幕・字幕翻訳・リアルタイム字幕 for YouTube™, Vimeo, Bilibili"
+  },
+  "appDesc": {
+    "message": "YouTube・Vimeo・Bilibiliの字幕を翻訳して2言語を1行で同時表示。字幕のない動画はリアルタイムで文字起こし、.srt書き出しにも対応。"
+  }
+}
