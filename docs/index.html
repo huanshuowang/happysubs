@@ -3,6 +3,22 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Google Analytics, on this page only (privacy.html, "This Website"). It
+       loads on the live site alone, so a local preview sends nothing; the
+       events below still land in window.dataLayer there, which is how to
+       check them. -->
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    if (/(^|\.)huanshuowang\.com$/.test(location.hostname)) {
+      gtag("js", new Date());
+      gtag("config", "G-KTTF39Q4P2");
+      const tag = document.createElement("script");
+      tag.async = true;
+      tag.src = "https://www.googletagmanager.com/gtag/js?id=G-KTTF39Q4P2";
+      document.head.appendChild(tag);
+    }
+  </script>
   <title>HappySubs — 双语字幕与实时听译 For YouTube / Vimeo / Bilibili</title>
   <meta name="description" content="在 YouTube、Vimeo、B站 上同时显示两种语言的字幕；没有字幕的视频还能实时听译。使用自带字幕或Google免费翻译，支持使用Claude / OpenAI / Gemini / DeepSeek 翻译。" />
   <link rel="icon" type="image/png" sizes="32x32" href="icons/icon32.png" />
@@ -1000,6 +1016,8 @@ iwr "$repo/start.bat" -OutFile start.bat</pre>
         const next = document.documentElement.lang.startsWith("zh") ? "en" : "zh";
         try { localStorage.setItem(STORAGE_KEY, next); } catch {}
         apply(next);
+        // The page opens in Chinese, so this counts the visitors who needed English.
+        gtag("event", next === "en" ? "switch_to_english" : "switch_to_chinese");
       });
     })();
 
@@ -1074,6 +1092,16 @@ iwr "$repo/start.bat" -OutFile start.bat</pre>
         if (video.currentTime > END_HOLD + 0.05) video.currentTime = END_HOLD;
         film.classList.add("is-ended");
         hotspot.classList.add("on");
+        once("film_complete");
+      }
+      // Analytics. The film starts by itself, so "it played" says nothing about
+      // the visitor; reaching the middle, the end card, or sound on does.
+      // Each is counted once per page view.
+      const sent = new Set();
+      function once(name) {
+        if (sent.has(name)) return;
+        sent.add(name);
+        gtag("event", name);
       }
       function sync() {
         btn.dataset.sound = film.dataset.mode === "auto" && !video.muted ? "on" : "off";
@@ -1093,6 +1121,7 @@ iwr "$repo/start.bat" -OutFile start.bat</pre>
       video.addEventListener("play", () => nextFrame(watch));
       video.addEventListener("timeupdate", () => {
         const t = video.currentTime;
+        if (t >= END_HOLD / 2) once("film_half");
         if (!video.paused && t >= END_HOLD) end();
         hotspot.classList.toggle("on", ended() || t >= HOT_FROM);
       });
@@ -1113,8 +1142,10 @@ iwr "$repo/start.bat" -OutFile start.bat</pre>
         }
         if (video.paused) play();
         sync();
+        if (!video.muted) once("film_sound_on");
       });
       replay.addEventListener("click", () => {
+        gtag("event", "film_replay");
         const hadFocus = document.activeElement === replay;
         film.classList.remove("is-ended");
         hotspot.classList.remove("on");
@@ -1135,6 +1166,17 @@ iwr "$repo/start.bat" -OutFile start.bat</pre>
         nav.classList.toggle("show", !e.isIntersecting && e.boundingClientRect.top < 0);
       }).observe(hero);
     })();
+
+    // Which "Add to Chrome" link was used. Each one already names its place on
+    // the page in utm_medium (nav, hero, film_endcard, install_steps, closing),
+    // the same value the store's own analytics reports, so the two line up.
+    // Delegated, because the language toggle rewrites the install steps' links.
+    document.addEventListener("click", (e) => {
+      const link = e.target.closest('a[href*="chromewebstore.google.com"]');
+      if (!link) return;
+      const position = new URL(link.href).searchParams.get("utm_medium") || "other";
+      gtag("event", "cta_click", { position });
+    });
   </script>
 
 </body>
