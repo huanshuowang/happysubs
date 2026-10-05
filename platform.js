@@ -498,6 +498,22 @@
         return btn.getAttribute("aria-pressed") === "true";
       },
       nativeLines,
+      // How much of the bottom of the player the controls cover right now, in
+      // pixels, and 0 while they are hidden. The player lifts its own caption
+      // clear of them; a subtitle we draw has to do the same, or it sits on the
+      // progress bar every time someone pauses. The progress bar overhangs the
+      // control strip by a few pixels, so the higher of the two tops counts.
+      controlsInset() {
+        const player = document.querySelector("#movie_player");
+        if (!player || player.classList.contains("ytp-autohide")) return 0;
+        const bar = player.querySelector(".ytp-chrome-bottom");
+        if (!bar || getComputedStyle(bar).opacity === "0") return 0;
+        const playerRect = player.getBoundingClientRect();
+        let top = bar.getBoundingClientRect().top;
+        const progress = bar.querySelector(".ytp-progress-bar-container");
+        if (progress) top = Math.min(top, progress.getBoundingClientRect().top);
+        return Math.max(0, playerRect.bottom - top);
+      },
       nativeCaptionWidth: () => widestLineWidth(ytCaptionNodes()),
       nativeCaptionBox: () => captionBox(ytCaptionNodes()),
       // What to hide when we draw the caption ourselves. Deliberately the same

@@ -20,6 +20,9 @@
   font-weight: 600;
   pointer-events: none;
   z-index: 999999 !important;
+  /* Rising clear of the player's controls when they come up, and settling
+     back when they go: the same short glide the player gives its own caption. */
+  transition: bottom 0.15s ease;
   white-space: pre-wrap;
   text-wrap: balance;
   word-break: normal;
@@ -60,7 +63,7 @@
   padding: 0;
   background: transparent !important;
   opacity: 0;
-  transition: opacity 0.3s;
+  transition: opacity 0.3s, bottom 0.15s ease;
 }
 
 .yds-overlay.yds-live.yds-live-visible,
@@ -221,6 +224,11 @@
 .yds-overlay.yds-dragging {
   outline: 2px dashed rgba(255, 255, 255, 0.7);
   outline-offset: 2px;
+  /* Under the pointer, not a beat behind it. */
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .yds-overlay { transition: none; }
 }
 
 /* Takeover: in inline/follow mode the player's caption is hidden and both
@@ -397,4 +405,134 @@ body.yds-suppressing-native .ytp-caption-window-container {
 
 @media (prefers-reduced-motion: reduce) {
   .yds-paid-api-actions button { transition: none; }
+}
+
+/* ---------- rating request ----------
+   Shown once, ever, over a paused video: the paid-API question's dimmed
+   backdrop and card, so it reads as ours and is impossible to miss. A small
+   card in the corner came first and nobody saw it.
+   Host pages style bare elements (links, buttons, line-height, box-sizing), so
+   everything the card relies on is set here rather than inherited. */
+.yds-rate {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 6, 7, 0.58);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont,
+               "Segoe UI", "PingFang SC", "Hiragino Sans GB", Roboto, sans-serif;
+  letter-spacing: 0.02em;
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.yds-rate.yds-rate-on { opacity: 1; }
+
+.yds-rate-card {
+  box-sizing: border-box;
+  width: min(400px, calc(100vw - 40px));
+  padding: 28px 26px 22px;
+  border-radius: 18px;
+  color: #f5f5f5;
+  background:
+    radial-gradient(260px 180px at 50% -60px, rgba(255, 0, 51, 0.30), transparent 70%),
+    linear-gradient(160deg, #1d1d1f 0%, #171718 60%, #141415 100%);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.62);
+  transform: translateY(8px) scale(0.98);
+  transition: transform 0.2s ease;
+}
+.yds-rate.yds-rate-on .yds-rate-card { transform: none; }
+
+.yds-rate-mark {
+  display: block;
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 14px;
+  color: #ff0033;
+  filter: drop-shadow(0 6px 18px rgba(255, 0, 51, 0.45));
+}
+.yds-rate-title {
+  margin: 0 0 8px;
+  text-wrap: balance;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.32;
+  letter-spacing: -0.01em;
+}
+.yds-rate-body {
+  margin: 0 0 22px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #a3a3a3;
+  /* Centred text that wraps to whatever the card's width gives it left one or
+     two characters stranded on the last row ("力。"). Balanced rows read as a
+     paragraph whatever the wording or the language. And Chinese breaks at
+     its punctuation, not in the middle of a word ("插 / 件"); a clause too
+     long for one row may still break anywhere rather than overflow. */
+  text-wrap: balance;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+/* Only on the second card: quieter than the body, and pulled up towards it so
+   the two read as one paragraph and a footnote. */
+.yds-rate-last {
+  margin: -12px 0 20px;
+  text-wrap: balance;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #7c7c80;
+}
+.yds-rate-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+.yds-rate .yds-rate-actions button,
+.yds-rate .yds-rate-actions a {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 10px 18px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.yds-rate .yds-rate-no {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #f5f5f5;
+}
+.yds-rate .yds-rate-no:hover { background: rgba(255, 255, 255, 0.13); }
+.yds-rate .yds-rate-yes {
+  min-width: 132px;
+  background: #ff0033;
+  color: #fff;
+  box-shadow: 0 6px 20px rgba(255, 0, 51, 0.38);
+}
+.yds-rate .yds-rate-yes:hover { background: #e60030; color: #fff; }
+.yds-rate .yds-rate-actions button:focus-visible,
+.yds-rate .yds-rate-actions a:focus-visible {
+  outline: 2px solid rgba(255, 77, 109, 0.75);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yds-rate,
+  .yds-rate-card,
+  .yds-rate .yds-rate-actions button,
+  .yds-rate .yds-rate-actions a { transition: none; }
 }

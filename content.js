@@ -225,6 +225,7 @@
     // frames; both used to survive after the checkbox was cleared.
     if (!STATE.settings.enabled) {
       closePaidApiPrompt();
+      closeRateCard();
       if (live.active) stopLive();
       clearRenderedSubtitles();
       return;
@@ -663,7 +664,7 @@
     if (isNativeTarget) {
       // Native second-language track — use directly, no merge / no translate.
       abortInflightTranslation(`native ${trackLang} loaded`);
-      preCuesNative = rawCues.map(c => ({ start: c.start, end: c.end, text: stripUnwantedPunctuation(c.text) }));
+      preCuesNative = closeShortGaps(rawCues.map(c => ({ start: c.start, end: c.end, text: stripUnwantedPunctuation(c.text) })));
       preCuesTranslated = [];
       setTranslationStatus({
         mode: "native",
@@ -702,7 +703,7 @@
     // are rolling timing fragments, so they are de-rolled for display and
     // assembled into sentences for the translator.
     const asrEnglish = isAsr && langMatches("en", trackLang);
-    const sourceCues = asrEnglish ? buildAsrDisplayCues(rawCues) : clampOverlappingCues(rawCues);
+    const sourceCues = closeShortGaps(asrEnglish ? buildAsrDisplayCues(rawCues) : clampOverlappingCues(rawCues));
     sourceCuesCache = sourceCues;
     sentenceGroups = asrEnglish ? buildAsrSentenceGroups(sourceCues) : null;
     sourceLang = trackLang;
@@ -870,6 +871,26 @@
       out.push({ ...c });
     }
     return out.filter(c => c.end > c.start);
+  }
+
+  // Close the hairline gaps between consecutive cues.
+  //
+  // Authored tracks leave a sliver of nothing between one line and the next —
+  // TED's are 24ms, all through the talk. The player's own renderer steps too
+  // coarsely to land in one; ours runs every frame, so it found every one: the
+  // subtitle vanished for a frame or two and came back, a blink before each new
+  // line. A gap this short is never a pause anyone is meant to see, so the line
+  // simply stays up until the next one takes its place. A real silence is
+  // longer than this and still clears the screen.
+  const CUE_GAP_BRIDGE = 0.3;   // seconds
+
+  function closeShortGaps(cues) {
+    const out = cues.map(c => ({ ...c }));
+    for (let i = 0; i + 1 < out.length; i++) {
+      const gap = out[i + 1].start - out[i].end;
+      if (gap > 0 && gap <= CUE_GAP_BRIDGE) out[i].end = out[i + 1].start;
+    }
+    return out;
   }
 
   // Assemble those fragments into sentences for the translator. The result
@@ -1935,6 +1956,7 @@ Translations:`;
     try { if (overlayEl) overlayEl.remove(); } catch {}
     overlayEl = null;
     removeToast();
+    closeRateCard();
     clearPaidAskRetry();
   }
 
@@ -1965,6 +1987,8 @@ Translations:`;
       return;
     }
 
+    followControls();
+
     if (live.active) {
       requestAnimationFrame(renderTick);
       return;
@@ -1976,6 +2000,7 @@ Translations:`;
     hideNativeCaption(takeover && overlayAllowed());
 
     if (video && cues.length && overlayAllowed()) {
+      noteBilingualPlayback(video);
       const text = findCuesAt(cues, video.currentTime);
       const displayText = alignWithNativeLineBreaks(text);
       const changed = displayText !== currentRenderedText;
@@ -1988,22 +2013,35 @@ Translations:`;
         // Both languages, ours to lay out: the original comes from the cues the
         // translation was made from, so the two lines are always the same cue.
         if (drawnInline) { clearInline(); drawnInline = false; }
-        renderSourceLine(sourceTextAt(video.currentTime));
+        // Face first, then the line: drawing it measures it, and a measurement
+        // taken in one face and painted in another is a line that wraps.
         matchNativeFont();
+        renderSourceLine(sourceTextAt(video.currentTime));
         if (changed || (overlayEl && overlayEl.style.display === "none")) {
           renderOverlay(displayText);
         }
-      } else if (drawInline(text)) {
-        renderSourceLine("");
-        if (drawnInline !== true) { hideOverlayEl(); drawnInline = true; }
       } else {
-        // Not taken over: the player is showing the original itself, so our box
-        // carries the translation alone. Without this the upper line kept
-        // whatever takeover last put there.
-        renderSourceLine("");
-        if (drawnInline !== false) { clearInline(); drawnInline = false; }
-        if (changed || (overlayEl && overlayEl.style.display === "none")) {
-          renderOverlay(displayText);
+        const followed = followPlayerCaption(cues, video.currentTime);
+        if (drawInline(followed === null ? text : followed)) {
+          renderSourceLine("");
+          if (drawnInline !== true) { hideOverlayEl(); drawnInline = true; }
+        } else if (followed === "") {
+          // The player is between lines, or has not drawn the next one yet —
+          // so nothing of ours either, and above all not our own box. The
+          // observer puts the translation in the moment the player's line
+          // arrives, before that frame is painted.
+          renderSourceLine("");
+          if (drawnInline !== false) { clearInline(); drawnInline = false; }
+          hideOverlayEl();
+        } else {
+          // Not taken over: the player is showing the original itself, so our
+          // box carries the translation alone. Without this the upper line
+          // kept whatever takeover last put there.
+          renderSourceLine("");
+          if (drawnInline !== false) { clearInline(); drawnInline = false; }
+          if (changed || (overlayEl && overlayEl.style.display === "none")) {
+            renderOverlay(displayText);
+          }
         }
       }
     } else if (currentRenderedText) {
@@ -2032,6 +2070,41 @@ Translations:`;
 
   function normalizeForLineMatch(text) {
     return (text || "").replace(/\s+/g, "");
+  }
+
+  // Inside the player's caption, the translation goes with the line the player
+  // is drawing — not with the line our clock says is due.
+  //
+  // The two are not the same moment. We look at the clock every frame; the
+  // player redraws its caption a few frames later, and briefly draws nothing
+  // between lines. While the clock alone decided, every new line went wrong
+  // for a few frames: the translation left before the original did, and the
+  // new one, finding no caption to join yet, was drawn in our own box at the
+  // bottom of the picture until the player caught up — a big pink line that
+  // flashed and jumped up into the caption, on every line of the video.
+  //
+  // So the line on screen is looked up in the track, and its translation is
+  // what goes in. Returns that translation; "" when the player is drawing no
+  // line, so neither do we; null when the player's line is not one we can
+  // place (another track, a caption we never saw), and the clock decides.
+  let normalizedSource = { from: null, texts: [] };
+  function followPlayerCaption(cues, t) {
+    if (!sourceCuesCache || !sourceCuesCache.length || !cues.length) return null;
+    if (inlineBlockedBecause() || isCcOn() !== true) return null;
+    const onScreen = normalizeForLineMatch(currentNativeText());
+    if (!onScreen) return "";
+    if (normalizedSource.from !== sourceCuesCache) {
+      normalizedSource = { from: sourceCuesCache, texts: sourceCuesCache.map(c => normalizeForLineMatch(c.text)) };
+    }
+    // Near the clock only: the player is behind by frames, not minutes, and a
+    // line said twice in one video must not borrow the other one's place.
+    for (let i = 0; i < sourceCuesCache.length; i++) {
+      const c = sourceCuesCache[i];
+      if (c.end < t - 3 || c.start > t + 3) continue;
+      if (normalizedSource.texts[i] !== onScreen) continue;
+      return findCuesAt(cues, (c.start + c.end) / 2);
+    }
+    return null;
   }
 
   function alignWithNativeLineBreaks(text) {
@@ -2242,6 +2315,169 @@ Translations:`;
     // Anything the viewer may need to act on stays; anything that is just good
     // news gets out of the way.
     if (!spec.sticky) toastHideTimer = setTimeout(hideToast, spec.hold || 2600);
+  }
+
+  // ---------- rating request ----------
+  //
+  // A rating is only a fair thing to ask of someone the extension has plainly
+  // worked for, so the only video that counts is one that has played for a
+  // full minute with both languages loaded. Then it asks at most three times,
+  // each time somewhere else, and stops for good the moment someone rates:
+  //
+  //   step 0  after the 5th such video: a card over the video, at the next
+  //           pause — never mid-sentence, never in full screen
+  //   step 1  from the 8th: a line at the top of the popup (popup.js), until
+  //           it is closed
+  //   step 2  after the 15th: the card over the video once more
+  //   step 3  done — three asks is enough
+  //
+  // Closing the card without answering moves things on just as "No thanks"
+  // does: someone who waves it away every time must still reach the end.
+  //
+  // { videos, step, rated } lives in storage.local on this device and goes
+  // nowhere else.
+  const RATE_CARD_AFTER = { 0: 5, 2: 15 };   // step → videos before the card
+  const RATE_COUNT_UNTIL = 15;              // nothing after this needs a count
+  const RATE_WATCH_MS = 60 * 1000;
+  const RATE_URL = "https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf/reviews";
+  // Null until read, and for good where there is no storage.local to keep it in.
+  let rateState = null;
+  const rateWatch = { videoId: null, ms: 0, last: 0, counted: false };
+  let rateCardEl = null;
+
+  function rateStorage() {
+    try { return chrome.storage.local || null; } catch { return null; }
+  }
+
+  function readRating(raw) {
+    const r = raw || {};
+    return { videos: r.videos | 0, step: r.step | 0, rated: !!r.rated };
+  }
+
+  function rateCardDue(s) {
+    return !!s && !s.rated && s.step in RATE_CARD_AFTER && s.videos >= RATE_CARD_AFTER[s.step];
+  }
+
+  function loadRateState() {
+    const store = rateStorage();
+    if (!store) return;
+    store.get(["ydsRating"], (r) => { rateState = readRating(r && r.ydsRating); });
+    // Another tab can count a video, or ask, while this one is open — and the
+    // popup moves the step on when its line is closed.
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== "local" || !changes.ydsRating) return;
+      rateState = readRating(changes.ydsRating.newValue);
+    });
+  }
+
+  // Read-modify-write rather than saving this tab's copy, so two tabs counting
+  // at the same time do not erase each other's videos.
+  function updateRateState(change) {
+    const store = rateStorage();
+    if (!store) return;
+    store.get(["ydsRating"], (r) => {
+      rateState = change(readRating(r && r.ydsRating));
+      store.set({ ydsRating: rateState });
+    });
+  }
+
+  // Called by the render loop on every frame that has a bilingual track to draw
+  // from. Only playing time counts, and each frame's share is capped, so a
+  // paused video or a stall in a background tab adds nothing.
+  function noteBilingualPlayback(video) {
+    if (!rateState || rateState.rated || rateState.step >= 3 || rateState.videos >= RATE_COUNT_UNTIL) return;
+    const now = performance.now();
+    if (rateWatch.videoId !== STATE.videoId) {
+      Object.assign(rateWatch, { videoId: STATE.videoId, ms: 0, last: now, counted: false });
+    }
+    const step = Math.min(now - rateWatch.last, 250);
+    rateWatch.last = now;
+    if (rateWatch.counted || video.paused) return;
+    rateWatch.ms += step;
+    if (rateWatch.ms < RATE_WATCH_MS) return;
+    rateWatch.counted = true;
+    updateRateState((s) => ({ ...s, videos: s.videos + 1 }));
+  }
+
+  function watchForRatingMoment() {
+    const ours = (e) => P && P.getVideoEl() === e.target;
+    document.addEventListener("pause", (e) => { if (ours(e)) maybeAskForRating(e.target); }, true);
+    // Pressing play is an answer too: back to the video, card out of the way.
+    document.addEventListener("play", (e) => { if (ours(e)) closeRateCard(); }, true);
+  }
+
+  function maybeAskForRating(video) {
+    if (!rateCardDue(rateState)) return;
+    const videoId = STATE.videoId;
+    // A pause that is really a seek, an ad break or the step to the next video
+    // is over within a moment. One the viewer chose is still there.
+    setTimeout(() => {
+      if (!video.paused || video.seeking || STATE.videoId !== videoId) return;
+      if (document.hidden || document.fullscreenElement) return;
+      // An embedded Vimeo player is someone else's page; a card in that frame
+      // would sit on top of their video.
+      if (window.top !== window) return;
+      if (!STATE.settings.enabled || tornDown || paidApiPromptEl || rateCardEl) return;
+      if (!rateCardDue(rateState)) return;
+      // Moved on before it is shown: each card is shown once, even if ignored.
+      const next = rateState.step + 1;
+      rateState = { ...rateState, step: next };
+      updateRateState((s) => ({ ...s, step: Math.max(s.step, next) }));
+      showRateCard(next >= 3);
+    }, 700);
+  }
+
+  // A card in the middle of the paused video, on the paid-API question's dimmed
+  // backdrop. It was a small card in the corner first, and in the corner it
+  // went unseen — on a page as busy as a watch page, nothing short of the
+  // centre is noticed. The video is paused behind it, so it covers nothing
+  // anyone is watching, and every way out of it is one action: either button,
+  // Escape, a click outside, or pressing play.
+  //
+  // The second time it is shown it says so: someone who has already said no
+  // once is owed the knowledge that this is the end of it.
+  function showRateCard(last) {
+    closeRateCard();
+    const root = document.createElement("div");
+    root.className = "yds-rate";
+    root.innerHTML = `
+      <div class="yds-rate-card" role="dialog" aria-modal="true" aria-label="${ydsT("rateTitle")}">
+        <svg class="yds-rate-mark" viewBox="0 0 128 128" aria-hidden="true"><g fill="currentColor">
+          <rect x="27" y="10" width="28" height="71"/><rect x="73" y="10" width="28" height="71"/>
+          <rect x="27" y="37" width="74" height="17"/><rect x="9" y="95" width="110" height="23" rx="11.5"/>
+        </g></svg>
+        <div class="yds-rate-title">${ydsT("rateTitle")}</div>
+        <div class="yds-rate-body">${ydsT("rateBody")}</div>
+        ${last ? `<div class="yds-rate-last">${ydsT("rateLast")}</div>` : ""}
+        <div class="yds-rate-actions">
+          <button type="button" class="yds-rate-no">${ydsT("rateNo")}</button>
+          <a class="yds-rate-yes" href="${RATE_URL}" target="_blank" rel="noopener">${ydsT("rateYes")}</a>
+        </div>
+      </div>`;
+    // "Not now": the step already moved on when the card was shown.
+    root.querySelector(".yds-rate-no").addEventListener("click", closeRateCard);
+    // Closed after the click has done its work, so the link still opens.
+    root.querySelector(".yds-rate-yes").addEventListener("click", () => {
+      updateRateState((st) => ({ ...st, rated: true }));
+      setTimeout(closeRateCard, 0);
+    });
+    // A click on the dimmed area outside the card is "not now".
+    root.addEventListener("click", (e) => { if (e.target === root) closeRateCard(); });
+    document.addEventListener("keydown", rateCardKeydown, true);
+    document.documentElement.appendChild(root);
+    rateCardEl = root;
+    // One frame in the page before it turns on, so it fades in rather than pops.
+    requestAnimationFrame(() => { if (rateCardEl === root) root.classList.add("yds-rate-on"); });
+  }
+
+  function rateCardKeydown(e) {
+    if (e.key === "Escape") closeRateCard();
+  }
+
+  function closeRateCard() {
+    document.removeEventListener("keydown", rateCardKeydown, true);
+    if (rateCardEl) rateCardEl.remove();
+    rateCardEl = null;
   }
 
   function ensureOverlay() {
@@ -2672,10 +2908,26 @@ Translations:`;
   //
   // A MutationObserver callback runs before the browser paints, so putting the
   // line back from here closes the gap entirely rather than shortening it.
+  //
+  // It is also where a new line is answered. When the player draws the next
+  // line, the translation that belongs to it goes in from here, in the same
+  // frame — re-inserting the last one we drew would pair the new original with
+  // the old translation until the next animation frame came round.
   function reassertInlineNow() {
-    if (drawnInline !== true || !lastInlineLines) return;
-    if (inlineBlockedBecause()) return;
-    try { P.renderInline(lastInlineLines); } catch {}
+    if (inlineBlockedBecause() || takeoverActive() || !overlayAllowed()) return;
+    if (!STATE.settings.enabled || live.active) return;
+    const video = P.getVideoEl();
+    const cues = preCuesNative.length ? preCuesNative : preCuesTranslated;
+    const followed = video && cues.length ? followPlayerCaption(cues, video.currentTime) : null;
+    if (followed === null) {
+      if (drawnInline !== true || !lastInlineLines) return;
+      try { P.renderInline(lastInlineLines); } catch {}
+      return;
+    }
+    if (followed && drawInline(followed) && drawnInline !== true) {
+      hideOverlayEl();
+      drawnInline = true;
+    }
   }
 
   // Same problem, other way round. In takeover we hide the player's caption by
@@ -2729,7 +2981,12 @@ Translations:`;
     let family = "";
     if (takeoverActive() && P && typeof P.captionEls === "function") {
       const el = P.captionEls()[0];
-      if (el) family = getComputedStyle(el).fontFamily || "";
+      // Between two lines the player has no caption element at all, and that
+      // is not a change of face. Treated as one, the line was set in our
+      // fallback face while the player was between lines and in the player's
+      // the moment it drew the next — measured in the one, painted in the
+      // other, so for a frame it wrapped onto two short rows. Every line.
+      family = el ? (getComputedStyle(el).fontFamily || "") : lastNativeFont;
     }
     if (family === lastNativeFont) return;
     lastNativeFont = family;
@@ -2772,8 +3029,31 @@ Translations:`;
   function positionOverlay() {
     if (!overlayEl) return;
     const offset = Math.max(0, Math.min(maxBottomOffset(), Number(STATE.settings.bottomOffset) || 0));
-    overlayEl.style.bottom = `${offset}%`;
+    // Never under the player's controls while they are up. The viewer's own
+    // height still applies when it is the higher of the two, so a subtitle
+    // dragged up the picture stays where it was put.
+    const lift = controlsLift();
+    lastControlsLift = lift;
+    overlayEl.style.bottom = lift ? `max(${offset}%, ${lift}px)` : `${offset}%`;
     overlayEl.style.top = "auto";
+  }
+
+  // The player's controls come up whenever someone pauses or moves the mouse,
+  // and go again a few seconds later. The player lifts its own caption clear of
+  // them; ours sat where it was and covered the progress bar and the chapter
+  // title. Nothing about the subtitle changes when the controls do, so this is
+  // checked every frame and the overlay moved only when the answer changes —
+  // the transition in overlay.css makes the move the same glide as the
+  // player's own.
+  const CONTROLS_GAP = 6;   // px between the subtitle and the top of the controls
+  let lastControlsLift = 0;
+  function controlsLift() {
+    const inset = P && typeof P.controlsInset === "function" ? P.controlsInset() : 0;
+    return inset > 0 ? Math.round(inset) + CONTROLS_GAP : 0;
+  }
+  function followControls() {
+    if (!overlayEl || overlayEl.style.display === "none") return;
+    if (controlsLift() !== lastControlsLift) positionOverlay();
   }
 
   // `bottom: 95%` only constrains the bottom edge; a two-row subtitle can still
@@ -3038,6 +3318,7 @@ Translations:`;
         if (newVid !== STATE.videoId) {
           abortInflightTranslation("video changed");
           closePaidApiPrompt();
+          closeRateCard();
           clearPaidAskRetry();   // a late track list for the previous video
           setTranslationStatus({
             mode: "idle",
@@ -3143,12 +3424,20 @@ Translations:`;
   // track and the original are authored separately, so their cue boundaries do
   // not line up and there is no index to pair them by — overlap in time is the
   // only thing the two have in common.
+  //
+  // A source line that only grazes the cue does not count. Closing hairline
+  // gaps stretches each line up to the start of the next, so where the two
+  // tracks are timed a little differently a line can now reach a fraction of a
+  // second into the following cue — and would bring the previous sentence
+  // along with the right one.
   function sourceTextWithin(src, cue) {
     if (!src.length) return "";
     const parts = [];
     for (const c of src) {
       if (c.end <= cue.start) continue;
       if (c.start >= cue.end) break;
+      const overlap = Math.min(c.end, cue.end) - Math.max(c.start, cue.start);
+      if (overlap < Math.min(CUE_GAP_BRIDGE, (c.end - c.start) / 2)) continue;
       const text = String(c.text || "").replace(/\n+/g, " ").trim();
       if (text && !parts.includes(text)) parts.push(text);
     }
@@ -3341,6 +3630,7 @@ Translations:`;
       scheduleAttach();
       watchSeeks();
       watchPlayback();
+      watchForRatingMoment();
       requestAnimationFrame(renderTick);
       log("attached", { platform: platformId, videoId: STATE.videoId });
       return true;
@@ -3349,6 +3639,7 @@ Translations:`;
     tryAttach();
 
     await loadSettings();
+    loadRateState();
     if (typeof ydsSetUiLang === "function") ydsSetUiLang(STATE.settings.uiLang);
     cacheKeyLang = STATE.settings.secondLang;
     if (P) STATE.videoId = P.getVideoId();

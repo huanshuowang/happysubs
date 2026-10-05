@@ -198,7 +198,18 @@
       paidDeclined: "Paid API declined; this video uses free Google Translate",
       notPaidProvider: "The selected translator is not a paid API",
       noSourceCues: "This video has no translatable source subtitles, or native subtitles are already in use",
-      dragHint: "Drag up/down to move the subtitles"
+      dragHint: "Drag up/down to move the subtitles",
+
+      rateTitle: "Enjoying HappySubs?",
+      rateBody: "I'm an independent developer. If you like this extension, please help me by leaving a rating in the store, so more people can find HappySubs. Thank you for your support.",
+      rateYes: "Rate it",
+      rateNo: "No thanks",
+      rateLast: "(This will be the last time I ask.)",
+      rateBanner: "Enjoying HappySubs? Leave a rating.",
+
+      shortcutHint: "{key} turns the second language on and off",
+      shortcutUnset: "No keyboard shortcut set.",
+      shortcutSet: "Set one"
     },
     zh: {
       appTitle: "HappySubs",
@@ -350,7 +361,18 @@
       paidDeclined: "用户取消了付费 API，本视频使用免费 Google Translate",
       notPaidProvider: "当前翻译源不是付费 API",
       noSourceCues: "当前视频没有可翻译的源字幕，或已经使用 native 字幕",
-      dragHint: "上下拖动调整字幕位置"
+      dragHint: "上下拖动调整字幕位置",
+
+      rateTitle: "HappySubs 用着还顺手吗？",
+      rateBody: "我是一个独立开发者。如果你喜欢这个插件，请帮助我在应用商店留个评分，让更多人找到 HappySubs。感谢你的支持。",
+      rateYes: "去评分",
+      rateNo: "不了，谢谢",
+      rateLast: "（这会是我最后一次询问）",
+      rateBanner: "用得顺手的话，给个评分吧",
+
+      shortcutHint: "{key} 随时开关第二语言",
+      shortcutUnset: "还没有设置快捷键。",
+      shortcutSet: "去设置"
     }
   };
 

@@ -78,6 +78,52 @@
     }
     [hidden] { display: none !important; }
 
+    /* ---- keyboard shortcut ----
+       At the foot of the main panel, where everyone who opens it passes it:
+       the shortcut is the quickest way to the thing most often done here. */
+    .shortcutHint {
+      display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+      margin: 11px 0 0; padding-top: 9px;
+      border-top: 1px solid var(--edge);
+      color: var(--ink-soft); font-size: 12px; line-height: 1.5;
+    }
+    .shortcutHint .keys { display: inline-flex; gap: 3px; }
+    .shortcutHint kbd {
+      min-width: 10px; padding: 2px 5px;
+      font: 600 11px/1.2 var(--font); color: var(--ink); text-align: center;
+      background: var(--glass-strong);
+      border: 1px solid var(--edge); border-bottom-width: 2px; border-radius: 5px;
+    }
+    .shortcutHint a { color: var(--accent); text-decoration: none; }
+    .shortcutHint a:hover { text-decoration: underline; }
+
+    /* ---- rating line ----
+       Once someone has watched five videos with both languages up (content.js
+       counts), a line here asks for a rating. Quiet on purpose: the popup is
+       opened to change something, and this must not get in the way of that.
+       It goes for good the moment they rate, or close it. */
+    .rateBanner {
+      display: flex; align-items: center; gap: 8px;
+      margin: 0 0 10px;
+      padding: 8px 6px 8px 11px;
+      border-radius: 11px;
+      background: var(--glass-strong);
+      border: 1px solid var(--edge);
+    }
+    .rateBanner .rateText { flex: 1 1 auto; min-width: 0; font-size: 12px; line-height: 1.45; }
+    .rateBanner .rateGo {
+      flex: 0 0 auto; padding: 4px 11px; border-radius: 999px;
+      background: var(--accent); color: var(--accent-ink);
+      font-size: 12px; font-weight: 650; text-decoration: none; white-space: nowrap;
+    }
+    .rateBanner .rateGo:hover { filter: brightness(0.95); }
+    .rateBanner .rateClose {
+      flex: 0 0 auto; width: 22px; height: 22px; padding: 0;
+      border: 0; border-radius: 50%; background: transparent;
+      color: var(--ink-soft); font: inherit; font-size: 15px; line-height: 22px; cursor: pointer;
+    }
+    .rateBanner .rateClose:hover { background: rgba(0, 0, 0, 0.06); color: var(--ink); }
+
     /* ---- title bar ---- */
     .titleBar { display: flex; align-items: center; justify-content: space-between;
                 gap: 8px; margin: 0 2px 10px; }
@@ -335,6 +381,12 @@
 
   <div id="mainView">
 
+  <div class="rateBanner" id="rateBanner" hidden>
+    <span class="rateText" data-i18n="rateBanner">用得顺手的话，给个评分吧</span>
+    <a class="rateGo" id="rateGo" href="https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf/reviews" target="_blank" rel="noopener" data-i18n="rateYes">去评分</a>
+    <button type="button" class="rateClose" id="rateClose" data-i18n-title="rateNo" title="不了，谢谢" aria-label="不了，谢谢">×</button>
+  </div>
+
   <div class="row">
     <label class="switch"><input type="checkbox" id="enabled" /> <span data-i18n="enable">启用</span></label>
     <span class="muted" id="videoInfo"></span>
@@ -437,6 +489,7 @@
 
   </div><!-- /panelTranslate -->
 
+  <div class="shortcutHint" id="shortcutHint" hidden></div>
 
   </div><!-- /mainView -->
 

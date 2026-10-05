@@ -30,9 +30,10 @@ window.chrome = {
 const MOCK = {
   ingest: null,
   cues: [
-    { start: 0,  end: 3,  text: "first line of dialogue." },
-    { start: 3,  end: 6,  text: "second line of dialogue." },
-    { start: 6,  end: 9,  text: "third line of dialogue." }
+    // 24ms between lines, as TED times them.
+    { start: 0,     end: 3,  text: "first line of dialogue." },
+    { start: 3.024, end: 6,  text: "second line of dialogue." },
+    { start: 6.024, end: 9,  text: "third line of dialogue." }
   ]
 };
 </script>
@@ -96,6 +97,9 @@ setTimeout(() => {
 
   textAt(1).then(a => {
     check("renders the cue at t=1s", a === "first line of dialogue", JSON.stringify(a));
+    return textAt(3.012);
+  }).then(g => {
+    check("keeps it up through the 24ms gap before the next line", g === "first line of dialogue", JSON.stringify(g));
     return textAt(4);
   }).then(b => {
     check("renders the cue at t=4s", b === "second line of dialogue", JSON.stringify(b));

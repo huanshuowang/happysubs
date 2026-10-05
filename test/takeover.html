@@ -14,6 +14,10 @@
   /* A face nothing else on the page uses, so "it took the player's font" is
      something the test can actually see. */
   .ytp-caption-window-container { font-family: Georgia, serif; }
+  /* Positions are checked where they come to rest. The glide in overlay.css is
+     for the eye; in a background frame the browser runs it slowly or not at
+     all, and a measurement taken mid-glide is of nothing in particular. */
+  #yt-dual-sub-overlay { transition: none !important; }
 </style>
 
 <h1>Machine transcripts: does the extension take the caption over?</h1>
@@ -96,6 +100,8 @@ window.YDS_PLATFORMS = {
       nativeCaptionWidth: () => 120 + (window.__rollTick = (window.__rollTick || 0) + 37) % 160,
       captionEls: () => document.querySelectorAll("#player .caption-visual-line"),
       nativeCaptionBox: () => null,
+      // The player's controls: up when a test says so, otherwise hidden.
+      controlsInset: () => window.__controlsInset || 0,
       renderInline: (lines) => {
         window.__inlineCalled = (window.__inlineCalled || 0) + 1;
         window.__lastInline = lines.slice();
@@ -291,6 +297,31 @@ async function playAt(t) {
         getComputedStyle(overlay().querySelector(".yds-text")).fontFamily !== nativeFace,
         getComputedStyle(overlay().querySelector(".yds-text")).fontFamily.slice(0, 30));
 
+  // Between two lines the player has no caption element at all. That must not
+  // reset the face: measured in one face and painted in the other, the line
+  // wrapped onto two short rows for a frame at every change of line.
+  const capWin = document.querySelector("#player .caption-window");
+  const playerLines = [...capWin.childNodes];
+  const widthBefore = overlay().style.width;
+  capWin.replaceChildren();
+  await settle(200);
+  check("between the player's lines, the original keeps the player's font",
+        getComputedStyle(overlay().querySelector(".yds-source")).fontFamily === nativeFace,
+        getComputedStyle(overlay().querySelector(".yds-source")).fontFamily.slice(0, 30));
+  check("…so the box keeps its width", overlay().style.width === widthBefore,
+        JSON.stringify([widthBefore, overlay().style.width]));
+  // The player draws its next line as new elements, never the old ones back.
+  capWin.replaceChildren(...playerLines.map(n => {
+    const fresh = n.cloneNode(true);
+    for (const el of [fresh, ...fresh.querySelectorAll("*")]) {
+      if (el.nodeType !== 1) continue;
+      el.removeAttribute("style");
+      for (const a of [...el.attributes]) if (a.name.startsWith("data-")) el.removeAttribute(a.name);
+    }
+    return fresh;
+  }));
+  await settle(100);
+
   // "Separate layer" is the opposite request: the player keeps showing the
   // original itself, and our box carries the translation alone.
   STORE.ydsSettings.subtitleMode = "floating";
@@ -432,7 +463,9 @@ async function playAt(t) {
   // our line has to change exactly when the player's does, or the Chinese under
   // the caption is a line behind the English above it.
   const h1 = { start: 300, end: 302, text: "Because if she wants to gain access to the" };
-  const h2 = { start: 302, end: 304, text: "nuggets, she'll need to first solve the nine" };
+  // 24ms apart, the way TED times every line: drawn frame by frame, that
+  // sliver used to blank the subtitle for a frame before each new line.
+  const h2 = { start: 302.024, end: 304, text: "nuggets, she'll need to first solve the nine" };
   window.__ctx.ingest({ cues: [h1, h2], lang: "en",
                         isAsr: false, isNativeTarget: false, key: "human1" });
   await settle(1400);
@@ -445,6 +478,12 @@ async function playAt(t) {
         window.__lastInline.length === 1
         && window.__lastInline[0] === "<Because if she wants to gain access to the>",
         JSON.stringify(window.__lastInline));
+  window.__inlineCalled = 0;
+  await playAt(302.012);
+  check("…and stays up through the hairline gap before the next line, with no blank frame",
+        window.__inlineCalled > 0
+        && window.__lastInline[0] === "<Because if she wants to gain access to the>",
+        JSON.stringify([window.__inlineCalled, window.__lastInline]));
   await playAt(h2.start + 1);
   check("…and it changes exactly when the player's line does",
         window.__lastInline.length === 1
@@ -492,12 +531,17 @@ async function playAt(t) {
   fire();
   await settle(150);
   window.__ctx.ingest({
-    cues: [{ start: 400, end: 408, text: "一条作者自己写的中文字幕" }],
+    cues: [{ start: 400, end: 408, text: "一条作者自己写的中文字幕" },
+           // Timed a little differently from the English below.
+           { start: 410, end: 414, text: "第二条" },
+           { start: 414, end: 418, text: "第三条" }],
     lang: "zh-Hans", isAsr: false, isNativeTarget: true, key: "native-zh"
   });
   window.__ctx.ingest({
     cues: [{ start: 400, end: 403, text: "The first English sentence." },
-           { start: 403, end: 408, text: "And the second one." }],
+           { start: 403, end: 408, text: "And the second one." },
+           { start: 410, end: 414.2, text: "Late one." },
+           { start: 414.2, end: 418, text: "Late two." }],
     // Not asr: a human source was ingested earlier in this harness, and the
     // pipeline deliberately refuses to fall back from one to a machine one.
     lang: "en", isAsr: false, isNativeTarget: false, key: "en-under-native"
@@ -509,6 +553,26 @@ async function playAt(t) {
         && shown(".yds-source").includes("The first English sentence.")
         && shown(".yds-source").includes("And the second one."),
         JSON.stringify([shown(".yds-source"), shown(".yds-text")]));
+  await playAt(415);
+  check("…but not a source line that only grazes the cue by a fraction of a second",
+        shown(".yds-text") === "第三条" && shown(".yds-source") === "Late two.",
+        JSON.stringify([shown(".yds-source"), shown(".yds-text")]));
+
+  // Pausing brings the player's controls up over the bottom of the picture.
+  // The player lifts its own caption clear of them; ours has to as well, or it
+  // sits on the progress bar and the chapter title.
+  const gapAbovePlayerBottom = () =>
+    document.getElementById("player").getBoundingClientRect().bottom - overlay().getBoundingClientRect().bottom;
+  const restingGap = gapAbovePlayerBottom();
+  // Taller than the subtitle's resting height (20% of 320px), so the move is real.
+  window.__controlsInset = 120;
+  await settle(400);
+  check("with the player's controls up, the subtitle sits clear above them",
+        gapAbovePlayerBottom() >= 120, `${Math.round(restingGap)}px → ${Math.round(gapAbovePlayerBottom())}px`);
+  window.__controlsInset = 0;
+  await settle(400);
+  check("…and settles back where it was when they go",
+        Math.abs(gapAbovePlayerBottom() - restingGap) < 1, `${Math.round(gapAbovePlayerBottom())}px`);
   STORE.ydsSettings.takeoverCaptions = false;
   fire();
   await settle(150);

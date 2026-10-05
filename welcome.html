@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HappySubs</title>
+  <link rel="icon" href="icons/icon32.png" />
+  <style>
+    /* Opened once, by the extension itself, right after a fresh install. Its one
+       job is the step that loses new users on YouTube: nothing appears until the
+       player's own captions are on. So the first screen is the steps and a demo
+       of them, side by side, and nothing else. The site's palette rather than
+       the popup's — this is a full page, and it should feel like the one people
+       came from. */
+    @property --on {
+      syntax: "<number>";
+      inherits: true;
+      initial-value: 0;
+    }
+    :root {
+      color-scheme: dark;
+      --bg: #0f0f0f;
+      --card: #1a1a1a;
+      --text: #f5f5f5;
+      --text-dim: #a3a3a3;
+      --brand: #ff0033;
+      --brand-2: #ff4d6d;
+      --border: rgba(255,255,255,0.08);
+      --border-surface: rgba(255,255,255,0.22);
+      --border-control: rgba(255,255,255,0.34);
+      --font: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI",
+              "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Roboto, sans-serif;
+      /* One loop of the demo. Every moving part keys off this, so the cursor,
+         the toolbar icon, the CC button, both subtitle lines and the step list
+         beside it stay in step. */
+      --loop: 10s;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background:
+        radial-gradient(900px 420px at 30% -120px, rgba(255,0,51,0.14), transparent 70%),
+        var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.6;
+      letter-spacing: 0.01em;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--brand-2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    a:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 3px; border-radius: 4px; }
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 0 32px; }
+
+    header { height: 68px; display: flex; align-items: center; justify-content: space-between; }
+    /* The site's language switch, same shape and place. */
+    .lang-toggle {
+      background: transparent; color: var(--text-dim);
+      border: 1px solid var(--border-control); border-radius: 999px;
+      padding: 5px 12px; font: inherit; font-size: 13px; cursor: pointer;
+    }
+    .lang-toggle:hover { color: var(--text); background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.55); }
+    .lang-toggle:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 3px; }
+    .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; color: var(--text); }
+    .brand svg { width: 24px; height: 24px; color: var(--brand); }
+
+    /* ---- first screen ----
+       Two columns: what to do, and that same thing happening. The demo spans
+       every row on the right; on a narrow window it drops in under the
+       headline so it is still seen before the steps it illustrates. */
+    .first {
+      display: grid;
+      grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.28fr);
+      grid-template-areas:
+        "head  demo"
+        "steps demo"
+        "cta   demo";
+      grid-template-rows: auto auto auto;
+      column-gap: 48px;
+      align-content: center;
+      min-height: calc(100vh - 68px);
+      padding: 8px 0 48px;
+    }
+    .head { grid-area: head; align-self: end; }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 7px;
+      color: #c9f5d4; font-size: 13px; font-weight: 600;
+      border: 1px solid rgba(61,220,132,0.35); background: rgba(61,220,132,0.08);
+      border-radius: 999px; padding: 3px 11px; margin-bottom: 16px;
+    }
+    .eyebrow::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #3ddc84; }
+    h1 {
+      font-size: clamp(26px, 2.6vw, 34px);
+      line-height: 1.18;
+      letter-spacing: -0.02em;
+      margin: 0 0 12px;
+      font-weight: 800;
+      text-wrap: balance;
+    }
+    h1 em { font-style: normal; color: var(--brand-2); white-space: nowrap; }
+    .lede { color: var(--text-dim); font-size: 15.5px; margin: 0; max-width: 34em; }
+
+    /* The steps light up as the demo reaches them. Each one's --on runs from 0
+       to 1 on the demo's clock; everything that marks a step as current is
+       mixed by it, so they ease in and out together. */
+    .steps { grid-area: steps; list-style: none; margin: 26px 0 0; padding: 0; display: grid; gap: 4px; }
+    .step {
+      display: grid;
+      grid-template-columns: 30px minmax(0, 1fr);
+      column-gap: 14px;
+      padding: 11px 14px 12px;
+      margin-left: -14px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,0,51, calc(0.42 * var(--on)));
+      background: rgba(255,0,51, calc(0.08 * var(--on)));
+    }
+    .step-1 { animation: on1 var(--loop) infinite; }
+    .step-2 { animation: on2 var(--loop) infinite; }
+    .step-3 { animation: on3 var(--loop) infinite; }
+    @keyframes on1 { 0%, 3% { --on: 0; } 6%, 19% { --on: 1; } 22%, 100% { --on: 0; } }
+    @keyframes on2 { 0%, 20% { --on: 0; } 23%, 34% { --on: 1; } 37%, 100% { --on: 0; } }
+    @keyframes on3 { 0%, 34% { --on: 0; } 37%, 89% { --on: 1; } 93%, 100% { --on: 0; } }
+    .num {
+      grid-row: span 2;
+      width: 30px; height: 30px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 14px; color: #fff;
+      border: 1.5px solid color-mix(in srgb, var(--brand) calc(var(--on) * 100%), rgba(255,255,255,0.34));
+      background: rgba(255,0,51, var(--on));
+    }
+    .step h2 { font-size: 16.5px; line-height: 30px; margin: 0; }
+    .step p { grid-column: 2; margin: 0; color: var(--text-dim); font-size: 14px; line-height: 1.55; }
+    .step strong { color: var(--text); font-weight: 600; }
+
+    .cta-block { grid-area: cta; align-self: start; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 26px; }
+    .cta {
+      display: inline-flex; align-items: center;
+      background: var(--brand); color: #fff;
+      padding: 12px 24px; border-radius: 999px;
+      font-weight: 700; font-size: 15.5px;
+      box-shadow: 0 8px 20px rgba(255,0,51,0.3);
+      transition: transform .15s, box-shadow .15s;
+    }
+    .cta:hover { text-decoration: none; transform: translateY(-1px); box-shadow: 0 10px 24px rgba(255,0,51,0.4); }
+    .cta-note { color: var(--text-dim); font-size: 13px; margin: 0; }
+
+    /* ---- the demo ----
+       A browser window drawn in CSS, so it reads as a picture of the steps
+       rather than a player to press: a window frame, a "Demo" label, a default
+       cursor, and the player's own buttons dimmed except the one that matters.
+       Everything inside is sized in container units, so the cursor's path
+       lands on the same spots at any width. */
+    .demo { grid-area: demo; align-self: center; margin: 0; }
+    .window {
+      container-type: inline-size;
+      position: relative;
+      border-radius: 14px;
+      overflow: hidden;
+      background: #1c1c1e;
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.10), 0 30px 80px rgba(0,0,0,0.6);
+      cursor: default;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .toolbar {
+      height: 7cqw;
+      display: flex; align-items: center; gap: 1.6cqw;
+      padding: 0 2cqw;
+      background: #2a2a2d;
+    }
+    .dots { display: flex; gap: 0.9cqw; margin-right: 0.6cqw; }
+    .dots i { width: 1.3cqw; height: 1.3cqw; border-radius: 50%; background: rgba(255,255,255,0.2); }
+    .address {
+      flex: 1; height: 4.2cqw; border-radius: 2.1cqw;
+      background: #1a1a1c; color: #8e8e93;
+      display: flex; align-items: center; padding: 0 2cqw;
+      font-size: clamp(9px, 1.7cqw, 13px); white-space: nowrap; overflow: hidden;
+    }
+    .tb-icon {
+      flex: none; width: 3.4cqw; height: 3.4cqw; border-radius: 0.9cqw;
+      display: flex; align-items: center; justify-content: center;
+      color: #a1a1a6;
+    }
+    .tb-icon svg { width: 2.2cqw; height: 2.2cqw; display: block; }
+    /* The pinned extension — what step 1 is about. */
+    .tb-hs { color: var(--brand); animation: hs-ring var(--loop) infinite; }
+    @keyframes hs-ring {
+      0%, 9%   { background: transparent; box-shadow: 0 0 0 0 rgba(255,0,51,0); }
+      12%, 19% { background: rgba(255,0,51,0.16); box-shadow: 0 0 0 0.5cqw rgba(255,0,51,0.32); }
+      23%, 100% { background: transparent; box-shadow: 0 0 0 0 rgba(255,0,51,0); }
+    }
+
+    .video { position: relative; aspect-ratio: 16 / 9; overflow: hidden; background: #000; }
+    .scene {
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(40% 55% at 30% 42%, rgba(255,170,120,0.5), transparent 70%),
+        radial-gradient(35% 50% at 72% 38%, rgba(120,150,255,0.36), transparent 70%),
+        radial-gradient(60% 40% at 50% 100%, rgba(255,0,51,0.22), transparent 70%),
+        linear-gradient(180deg, #2a2224 0%, #151214 100%);
+    }
+    /* A speaker, abstracted: a silhouette against the stage light. */
+    .figure {
+      position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
+      height: 66%; width: auto;
+      color: #141012;
+      filter: blur(0.6px) drop-shadow(0 0 30px rgba(255,170,120,0.18));
+    }
+    .badge {
+      position: absolute; top: 2.2cqw; left: 2.2cqw;
+      display: inline-flex; align-items: center; gap: 0.6em;
+      font-size: clamp(10px, 1.55cqw, 13px); font-weight: 700; letter-spacing: 0.06em;
+      color: #fff;
+      background: rgba(15,15,15,0.6);
+      -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.22);
+      border-radius: 999px;
+      padding: 0.35em 0.9em;
+    }
+    .badge svg { width: 1.1em; height: 1.1em; display: block; }
+
+    .subs {
+      position: absolute; left: 50%; bottom: 9.5cqw; transform: translateX(-50%);
+      width: 86%;
+      display: flex; flex-direction: column; align-items: center; gap: 0.27em;
+      font-size: clamp(10px, 2.3cqw, 20px);
+      font-weight: 600;
+      text-align: center;
+      line-height: 1.34;
+    }
+    .sub {
+      display: inline;
+      padding: 0.17em 0.42em;
+      border-radius: 7px;
+      background: rgba(0,0,0,0.6);
+      text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+      -webkit-box-decoration-break: clone;
+      box-decoration-break: clone;
+      opacity: 0;
+    }
+    .sub-src { color: #fff; font-size: 0.86em; animation: src-in var(--loop) infinite; }
+    .sub-tr  { color: #f7c9c8; animation: tr-in var(--loop) infinite; }
+    @keyframes src-in { 0%, 35% { opacity: 0; transform: translateY(4px); } 38%, 88% { opacity: 1; transform: none; } 92%, 100% { opacity: 0; } }
+    @keyframes tr-in  { 0%, 39% { opacity: 0; transform: translateY(4px); } 42%, 88% { opacity: 1; transform: none; } 92%, 100% { opacity: 0; } }
+
+    /* The player's controls, placed rather than laid out, because the cursor
+       has to find CC at a known spot: its centre is 86.5cqw across and 3.2cqw
+       up from the bottom of the video. */
+    .shade { position: absolute; left: 0; right: 0; bottom: 0; height: 14cqw; background: linear-gradient(transparent, rgba(0,0,0,0.7)); }
+    .progress { position: absolute; left: 2.4cqw; right: 2.4cqw; bottom: 6.6cqw; height: 0.35cqw; background: rgba(255,255,255,0.22); border-radius: 0.2cqw; }
+    .progress i { display: block; width: 34%; height: 100%; background: rgba(255,0,51,0.7); border-radius: inherit; }
+    .ctl { position: absolute; bottom: 1.9cqw; height: 2.6cqw; display: flex; align-items: center; color: #fff; opacity: 0.45; }
+    .ctl svg { height: 100%; width: auto; display: block; }
+    .ctl-play { left: 2.4cqw; }
+    .ctl-vol  { left: 6.8cqw; }
+    .ctl-fs   { right: 2.4cqw; }
+    .ctl-gear { right: 6.8cqw; }
+    .cc {
+      position: absolute; right: 11.6cqw; bottom: 1.9cqw;
+      width: 3.8cqw; height: 2.6cqw;
+      display: flex; align-items: center; justify-content: center;
+      border: 0.28cqw solid #fff; border-radius: 0.5cqw;
+      font: 800 1.3cqw/1 var(--font); letter-spacing: 0.04em; color: #fff;
+    }
+    /* The player's own "on" mark: a red rule under the button. */
+    .cc::after {
+      content: ""; position: absolute; left: -0.4cqw; right: -0.4cqw; bottom: -1cqw; height: 0.4cqw;
+      border-radius: 0.2cqw; background: var(--brand);
+      transform: scaleX(0);
+      animation: cc-on var(--loop) infinite;
+    }
+    @keyframes cc-on { 0%, 32% { transform: scaleX(0); } 34%, 92% { transform: scaleX(1); } 94%, 100% { transform: scaleX(0); } }
+    .ripple {
+      position: absolute; left: 86.5cqw; top: 53.05cqw;
+      width: 5cqw; height: 5cqw; margin: -2.5cqw 0 0 -2.5cqw;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.4);
+      transform: scale(0); opacity: 0;
+      animation: ripple var(--loop) infinite;
+    }
+    @keyframes ripple { 0%, 31% { transform: scale(0); opacity: 0; } 32% { transform: scale(0.3); opacity: 0.9; } 39%, 100% { transform: scale(1.5); opacity: 0; } }
+
+    /* In window coordinates: the toolbar is 7cqw tall, so the extension icon's
+       centre is (96.3, 3.5) and CC's is (86.5, 7 + 56.25 - 3.2 = 60.05). */
+    .cursor {
+      position: absolute; left: 0; top: 0;
+      width: 3.2cqw;
+      transform-origin: 0 0;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6));
+      animation: cursor var(--loop) infinite;
+    }
+    .cursor svg { width: 100%; height: auto; display: block; }
+    @keyframes cursor {
+      0%   { opacity: 0; transform: translate(55cqw, 30cqw); }
+      4%   { opacity: 1; transform: translate(55cqw, 30cqw); }
+      12%  { opacity: 1; transform: translate(96.1cqw, 3.4cqw); }
+      20%  { opacity: 1; transform: translate(96.1cqw, 3.4cqw); }
+      30%  { opacity: 1; transform: translate(86.3cqw, 59.9cqw) scale(1); }
+      32%  { opacity: 1; transform: translate(86.3cqw, 59.9cqw) scale(0.82); }
+      34%  { opacity: 1; transform: translate(86.3cqw, 59.9cqw) scale(1); }
+      44%  { opacity: 1; transform: translate(92cqw, 70cqw); }
+      48%, 100% { opacity: 0; transform: translate(92cqw, 70cqw); }
+    }
+
+    /* Nothing moves for anyone who asked for less motion: the finished frame,
+       captions on and both lines showing, and no step singled out. */
+    @media (prefers-reduced-motion: reduce) {
+      .step-1, .step-2, .step-3, .tb-hs, .sub-src, .sub-tr, .cc::after, .cursor, .ripple { animation: none; }
+      .sub { opacity: 1; }
+      .cc::after { transform: scaleX(1); }
+      .cursor, .ripple { display: none; }
+    }
+
+    /* ---- below the fold ---- */
+    .tips { padding: 28px 0 0; border-top: 1px solid var(--border); }
+    .tips h2 { font-size: 15px; color: var(--text-dim); font-weight: 600; margin: 0 0 14px; letter-spacing: 0.04em; }
+    .tips ul { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 28px; margin: 0; padding: 0; list-style: none; }
+    .tips li { color: var(--text-dim); font-size: 14.5px; padding-left: 18px; position: relative; }
+    .tips li::before { content: ""; position: absolute; left: 2px; top: 0.7em; width: 6px; height: 6px; border-radius: 50%; background: var(--brand-2); }
+    .tips strong { color: var(--text); font-weight: 600; }
+    kbd {
+      font: 600 12.5px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: var(--text);
+      background: #232323; border: 1px solid var(--border-surface); border-bottom-width: 2px;
+      border-radius: 5px; padding: 2px 6px;
+    }
+
+    footer {
+      margin: 48px 0 0; padding: 24px 0 40px;
+      border-top: 1px solid var(--border);
+      display: flex; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap;
+      color: var(--text-dim); font-size: 13.5px;
+    }
+    footer nav { display: flex; gap: 18px; }
+    footer a { color: var(--text-dim); }
+    footer a:hover { color: var(--text); }
+
+    @media (max-width: 900px) {
+      .first {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas: "head" "demo" "steps" "cta";
+        min-height: 0;
+        padding-top: 12px;
+      }
+      .demo { margin-top: 24px; }
+      .tips ul { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 520px) {
+      .wrap { padding: 0 16px; }
+      .step { margin-left: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <span class="brand">
+        <svg viewBox="0 0 128 128" aria-hidden="true"><g fill="currentColor">
+          <rect x="27" y="10" width="28" height="71"/><rect x="73" y="10" width="28" height="71"/>
+          <rect x="27" y="37" width="74" height="17"/><rect x="9" y="95" width="110" height="23" rx="11.5"/>
+        </g></svg>
+        HappySubs
+      </span>
+      <button class="lang-toggle" id="langToggle" type="button" aria-label="切换到中文">中</button>
+    </header>
+
+    <main>
+      <section class="first">
+        <div class="head">
+          <div class="eyebrow" data-t="eyebrow">Installed</div>
+          <h1 data-html="headline">You're set.<br>On YouTube, <em>turn on CC</em> first.</h1>
+          <p class="lede" data-t="lede">HappySubs translates the captions a video already has. On Vimeo and Bilibili there's nothing to switch on.</p>
+        </div>
+
+        <ol class="steps">
+          <li class="step step-1">
+            <span class="num">1</span>
+            <h2 data-t="step1Title">Pin it to the toolbar</h2>
+            <p data-t="step1Body">Click the puzzle-piece icon by the address bar, then the pin next to HappySubs.</p>
+          </li>
+          <li class="step step-2">
+            <span class="num">2</span>
+            <h2 data-t="step2Title">Open a video, click CC</h2>
+            <p data-html="step2Body">Bottom right of the player. <strong>Refresh any video page that was already open.</strong></p>
+          </li>
+          <li class="step step-3">
+            <span class="num">3</span>
+            <h2 data-t="step3Title">Both languages appear</h2>
+            <p data-html="step3Body" id="step3Body">Click the toolbar icon to change the second language.</p>
+          </li>
+        </ol>
+
+        <div class="cta-block">
+          <a class="cta" href="https://www.youtube.com/watch?v=arj7oStGLkU" target="_blank" rel="noopener" data-t="tryIt">Try it on a video</a>
+          <p class="cta-note" data-t="tryNote">A TED talk with human-made captions</p>
+        </div>
+
+        <figure class="demo">
+          <div class="window" role="img" data-aria="demoAlt" aria-label="Demo: the HappySubs icon in the toolbar, then a click on the player's CC button, and the subtitle appears in two languages.">
+            <div class="toolbar" aria-hidden="true">
+              <span class="dots"><i></i><i></i><i></i></span>
+              <span class="address">youtube.com/watch?v=…</span>
+              <span class="tb-icon"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M10 3a2 2 0 0 1 2 2v1h3a1 1 0 0 1 1 1v3h1a2 2 0 1 1 0 4h-1v4a1 1 0 0 1-1 1h-4v-1a2 2 0 1 0-4 0v1H4a1 1 0 0 1-1-1v-4h1a2 2 0 1 0 0-4H3V7a1 1 0 0 1 1-1h4V5a2 2 0 0 1 2-2z"/></svg></span>
+              <span class="tb-icon tb-hs"><svg viewBox="0 0 128 128"><g fill="currentColor">
+                <rect x="27" y="10" width="28" height="71"/><rect x="73" y="10" width="28" height="71"/>
+                <rect x="27" y="37" width="74" height="17"/><rect x="9" y="95" width="110" height="23" rx="11.5"/>
+              </g></svg></span>
+            </div>
+            <div class="video" aria-hidden="true">
+              <div class="scene"></div>
+              <svg class="figure" viewBox="0 0 200 200"><g fill="currentColor">
+                <ellipse cx="100" cy="58" rx="34" ry="40"/>
+                <path d="M86 90v18c-36 6-64 24-72 62l-4 30h180l-4-30c-8-38-36-56-72-62V90z"/>
+              </g></svg>
+              <span class="badge">
+                <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M20 12a8 8 0 1 1-2.3-5.6M20 4v4.5h-4.5"/></svg>
+                <span data-t="demoBadge">DEMO</span>
+              </span>
+              <div class="subs">
+                <span class="sub sub-src" id="demoSrc">Learning a language is easier when you can see both.</span>
+                <span class="sub sub-tr" id="demoTr">能同时看到两种语言，学起来就容易多了。</span>
+              </div>
+              <div class="shade"></div>
+              <div class="progress"><i></i></div>
+              <span class="ctl ctl-play"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M7 4.5v15l12-7.5z"/></svg></span>
+              <span class="ctl ctl-vol"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg></span>
+              <span class="cc">CC</span>
+              <span class="ctl ctl-gear"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L15 3.4h-4L10.6 6a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1c.5.4 1.1.7 1.7 1l.4 2.6h4l.4-2.6c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.4zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg></span>
+              <span class="ctl ctl-fs"><svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></span>
+              <span class="ripple"></span>
+            </div>
+            <span class="cursor" aria-hidden="true"><svg viewBox="0 0 20 24"><path d="M2 1.5v18.2l4.6-4.4 3 6.9 3.3-1.4-3-6.8h6.5z" fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg></span>
+          </div>
+        </figure>
+      </section>
+
+      <section class="tips">
+        <h2 data-t="tipsTitle">Worth knowing</h2>
+        <ul>
+          <li data-html="tipLive">No captions on a video at all? <a href="https://huanshuowang.com/happysubs/#live" target="_blank" rel="noopener">Live transcription</a> writes them as it plays.</li>
+          <li data-html="tipShortcut" id="tipShortcut"></li>
+          <li data-html="tipOnly">Turn on <strong>Translation only</strong> in the popup to read just the translation, with CC off.</li>
+          <li data-html="tipDrag">Hover over the subtitle and a handle appears — <strong>drag it</strong> up or down, full screen included.</li>
+          <li data-html="tipSrt">Download what you're watching as an <strong>.srt</strong>, in both languages or either one.</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer>
+      <span data-t="footerNote">Free, open source, and no usage data collected.</span>
+      <nav>
+        <a href="https://huanshuowang.com/happysubs/" target="_blank" rel="noopener" data-t="linkSite">Website</a>
+        <a href="https://github.com/huanshuowang/happysubs" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://huanshuowang.com/happysubs/privacy.html" target="_blank" rel="noopener" data-t="linkPrivacy">Privacy</a>
+      </nav>
+    </footer>
+  </div>
+
+  <script src="i18n.js"></script>
+  <script src="welcome.js"></script>
+</body>
+</html>

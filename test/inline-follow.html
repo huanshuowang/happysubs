@@ -1,0 +1,166 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>YDS inline follows the player</title>
+<link rel="stylesheet" href="../overlay.css">
+<style>
+  body { font: 14px/1.5 -apple-system, sans-serif; margin: 16px; }
+  pre { background: #f4f4f4; padding: 10px; white-space: pre-wrap; }
+  #player { position: relative; width: 640px; height: 320px; margin-top: 12px; background: #333; }
+  .ytp-caption-window-container { position: absolute; left: 0; right: 0; bottom: 8%; text-align: center; }
+  .caption-visual-line { display: block; color: #fff; }
+</style>
+
+<h1>Inside the player's caption, the translation follows the player's line</h1>
+<pre id="out">running…</pre>
+<div id="player">
+  <video id="v"></video>
+  <div class="ytp-caption-window-container"><div class="caption-window"></div></div>
+</div>
+
+<script>
+// The player here behaves the way YouTube's does: it redraws its caption a few
+// frames after the clock says a new line is due, and draws nothing at all
+// between two lines for a moment. Each of those used to make our translation
+// part company with the original — it left early, and the new one was drawn in
+// our own box at the bottom of the picture until the player caught up.
+const STORE = { ydsSettings: {
+  enabled: true, secondLang: "zh-Hans", uiLang: "auto", bottomOffset: 5,
+  fontSize: 20, color: "#ffffff", background: "rgba(0,0,0,0.7)",
+  translationProvider: "google", captionWidth: 60, subtitleMode: "inline",
+  takeoverCaptions: false, translationOnly: false, apiKeys: {}, models: {}
+} };
+window.chrome = {
+  runtime: { id: "yds-test", getURL: (f) => "/" + f, onMessage: { addListener() {} }, lastError: null },
+  i18n: { getUILanguage: () => "zh-CN" },
+  storage: { sync: { get: (k, cb) => setTimeout(() => cb(JSON.parse(JSON.stringify(STORE))), 0),
+                     set: (o, cb) => { Object.assign(STORE, o); cb && cb(); } },
+             onChanged: { addListener() {} } }
+};
+// Translate by bracketing, so a translation says which line it came from.
+const realFetch = window.fetch.bind(window);
+window.fetch = async (url, opts) => {
+  const u = String(url && url.url ? url.url : url);
+  if (u.includes("clients5.google.com") || u.includes("translate.googleapis.com")) {
+    const qs = new URL(u).searchParams.getAll("q");
+    return new Response(JSON.stringify(qs.map(q => ["<" + q + ">", "en"])),
+                        { status: 200, headers: { "content-type": "application/json" } });
+  }
+  return realFetch(url, opts);
+};
+</script>
+<script src="../i18n.js"></script>
+<script src="../platform.js"></script>
+<script src="../live.js"></script>
+<script>
+const captionWindow = () => document.querySelector("#player .caption-window");
+const theirLines = () => [...captionWindow().querySelectorAll(".caption-visual-line:not([data-ours])")];
+// What the player draws. Rebuilt from scratch on every change, as YouTube does.
+function playerDraws(text) {
+  captionWindow().replaceChildren();
+  if (text) {
+    const line = document.createElement("span");
+    line.className = "caption-visual-line";
+    line.textContent = text;
+    captionWindow().appendChild(line);
+  }
+}
+const ours = () => [...captionWindow().querySelectorAll("[data-ours]")].map(n => n.textContent);
+
+window.YDS_PLATFORMS = {
+  detect: () => "youtube",
+  create: (id, ctx) => {
+    window.__ctx = ctx;
+    return {
+      id: "youtube", requiresCcForTracks: false,
+      looksLikeVideoPage: () => true,
+      getVideoId: () => "TESTVID",
+      getVideoEl: () => document.getElementById("v"),
+      getContainer: () => document.getElementById("player"),
+      isCcOn: () => true,
+      nativeLines: () => theirLines().map(n => n.textContent.trim()).filter(Boolean),
+      nativeCaptionWidth: () => 300,
+      captionEls: () => theirLines(),
+      nativeCaptionBox: () => null,
+      // Like the real one: nothing to join when the player draws no line.
+      renderInline: (lines) => {
+        const host = captionWindow();
+        if (!theirLines().length) { host.querySelectorAll("[data-ours]").forEach(n => n.remove()); return false; }
+        const mine = [...host.querySelectorAll("[data-ours]")];
+        if (mine.length !== lines.length) {
+          mine.forEach(n => n.remove());
+          for (const l of lines) {
+            const s = document.createElement("span");
+            s.className = "caption-visual-line"; s.dataset.ours = "1";
+            host.appendChild(s);
+          }
+        }
+        [...host.querySelectorAll("[data-ours]")].forEach((n, i) => { if (n.textContent !== lines[i]) n.textContent = lines[i]; });
+        return true;
+      },
+      clearInline: () => captionWindow().querySelectorAll("[data-ours]").forEach(n => n.remove()),
+      observeTarget: () => document.getElementById("player"),
+      start() {}, requestTrack() {}, forgetLoadedCues() {}, reset() {}
+    };
+  }
+};
+window.requestAnimationFrame = (fn) => setTimeout(() => fn(performance.now()), 16);
+</script>
+<script src="../content.js"></script>
+<script>
+const results = [];
+const check = (n, p, d) => results.push({ n, p: !!p, d });
+const settle = (ms) => new Promise(r => setTimeout(r, ms));
+const v = document.getElementById("v");
+const clockAt = (t) => Object.defineProperty(v, "currentTime", { get: () => t, configurable: true });
+const boxShowing = () => {
+  const o = document.querySelector("#yt-dual-sub-overlay");
+  return !!o && o.style.display !== "none" && !!(o.querySelector(".yds-text") || {}).textContent;
+};
+
+// The translation of a line, as drawn: a closing full stop is dropped from it.
+const tr = (L) => `<${L.text.replace(/\.$/, "")}>`;
+const L1 = { start: 10, end: 12, text: "But then came my 90-page senior thesis," };
+const L2 = { start: 12.024, end: 14, text: "a paper you're supposed to spend a year on." };
+
+(async () => {
+  await settle(700);   // boot, settings, the caption observer attaching
+  window.__ctx.ingest({ cues: [L1, L2], lang: "en", isAsr: false, isNativeTarget: false, key: "human" });
+  await settle(1200);  // translated
+
+  clockAt(11); playerDraws(L1.text);
+  await settle(200);
+  check("the translation goes into the player's caption",
+        ours().join() === tr(L1) && !boxShowing(), JSON.stringify([ours(), boxShowing()]));
+
+  // The clock has moved on to the next line; the player has not redrawn yet.
+  clockAt(12.1);
+  await settle(200);
+  check("while the player still shows the old line, the old translation stays with it",
+        ours().join() === tr(L1) && !boxShowing(), JSON.stringify([ours(), boxShowing()]));
+
+  // The player clears its caption before drawing the next line.
+  playerDraws("");
+  await settle(200);
+  check("while the player draws nothing, nothing of ours is drawn — and never our own box",
+        ours().length === 0 && !boxShowing(), JSON.stringify([ours(), boxShowing()]));
+
+  // The player draws the next line: the translation joins it before the frame is painted.
+  playerDraws(L2.text);
+  await Promise.resolve();   // observers run here, before paint
+  check("the next line's translation goes in the moment the player draws it",
+        ours().join() === tr(L2) && !boxShowing(), JSON.stringify([ours(), boxShowing()]));
+  await settle(200);
+  check("…and stays", ours().join() === tr(L2) && !boxShowing(), JSON.stringify([ours(), boxShowing()]));
+
+  // A line the track does not have (the player on some other track): the clock decides, as before.
+  clockAt(11); playerDraws("a line from somewhere else");
+  await settle(200);
+  check("a player line we cannot place falls back to the clock",
+        ours().join() === tr(L1), JSON.stringify(ours()));
+
+  const pass = results.filter(r => r.p).length;
+  document.getElementById("out").textContent =
+    results.map(r => `${r.p ? "PASS" : "FAIL"}  ${r.n}${r.d ? "   [" + r.d + "]" : ""}`).join("\n")
+    + `\n\n${pass}/${results.length} passed`;
+})();
+</script>

@@ -21,6 +21,9 @@ const STORE = { ydsSettings: {
   bottomOffset: 22, fontSize: 22, color: "#ffffff", background: "rgba(0,0,0,0.6)",
   translationProvider: "google", paidApiMode: "ask", apiKeys: {}, models: {}
 } };
+// The rating counter content.js keeps: eight videos in, and the card over the
+// video already shown without a rating — the popup's turn to ask.
+const LOCAL = { ydsRating: { videos: 8, step: 1 } };
 window.chrome = {
   runtime: { id: "yds-test", getURL: (f) => "/" + f, lastError: null },
   i18n: { getUILanguage: () => "en-US" },        // pretend the browser is English
@@ -30,9 +33,16 @@ window.chrome = {
       get: (k) => Promise.resolve(JSON.parse(JSON.stringify(STORE))),
       set: (obj) => { Object.assign(STORE, obj); return Promise.resolve(); }
     },
+    local: {
+      get: (k) => Promise.resolve(JSON.parse(JSON.stringify(LOCAL))),
+      set: (obj) => { Object.assign(LOCAL, JSON.parse(JSON.stringify(obj))); return Promise.resolve(); }
+    },
     onChanged: { addListener() {} }
   },
+  // The shortcut as Chrome reports it; a test can clear it to see the unset case.
+  commands: { getAll: () => Promise.resolve([{ name: "toggle-subtitles", shortcut: window.__shortcut ?? "Alt+Shift+S" }]) },
   tabs: {
+    create: (o) => { window.__opened = o.url; return Promise.resolve({}); },
     query: () => Promise.resolve([{ id: 1, url: "https://www.youtube.com/watch?v=abc" }]),
     sendMessage: (id, msg, cb) => {
       if (msg && msg.type === "YDS_GET_SRT") {
@@ -102,6 +112,32 @@ const loadScript = (src) => new Promise((res, rej) => {
         String(document.getElementById("lang").options.length));
   check("second language is selected", document.getElementById("lang").value === "zh-Hans",
         document.getElementById("lang").value);
+
+  const rateBanner = document.getElementById("rateBanner");
+  check("at the 8th video, after the card over the video, the panel asks for a rating",
+        !!rateBanner && !rateBanner.hidden, "");
+  document.getElementById("rateClose").click();
+  await settle(50);
+  check("…and closing it hands the last ask back to the video",
+        rateBanner.hidden && LOCAL.ydsRating.step === 2 && !LOCAL.ydsRating.rated, JSON.stringify(LOCAL.ydsRating));
+
+  // The shortcut at the foot of the panel, as Chrome has it bound.
+  const hint = document.getElementById("shortcutHint");
+  const hintWords = ydsT("shortcutHint").replace("{key}", "").trim();
+  check("the panel shows the keyboard shortcut",
+        !hint.hidden && [...hint.querySelectorAll("kbd")].map(k => k.textContent).join("+") === "Alt+Shift+S"
+        && hint.textContent.includes(hintWords), hint.textContent);
+  window.__shortcut = "";
+  await renderShortcutHint();
+  const setLink = hint.querySelector("a");
+  check("…and, when Chrome has none bound, says so with a way to set one",
+        !!setLink && hint.textContent.includes(ydsT("shortcutUnset")), hint.textContent);
+  // A real click event: this page stubs out HTMLAnchorElement.click() above.
+  setLink && setLink.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  check("…which opens Chrome's shortcut settings", window.__opened === "chrome://extensions/shortcuts",
+        String(window.__opened));
+  window.__shortcut = undefined;
+  await renderShortcutHint();
 
   const expected = UI_LANG === "zh"
     ? { enable: "启用", only: "仅显示翻译字幕（不用开原生字幕）" }

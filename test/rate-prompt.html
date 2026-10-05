@@ -1,0 +1,227 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>YDS rating request</title>
+<link rel="stylesheet" href="../overlay.css">
+<h1>YDS rating request</h1>
+<pre id="out">running… (about 20 seconds)</pre>
+
+<div id="fake-player" style="position:relative;width:480px;height:270px;background:#222">
+  <video id="v" src="data:video/mp4;base64," style="width:100%;height:100%"></video>
+</div>
+
+<script>
+// storage.sync for settings, storage.local for the rating counter — seeded at
+// four videos, so one more minute of bilingual playback makes it eligible.
+const STORE = { ydsSettings: { enabled: true, secondLang: "en", translationProvider: "google", apiKeys: {} } };
+const LOCAL = { ydsRating: { videos: 4, step: 0 } };
+const changeListeners = [];
+const copy = (o) => JSON.parse(JSON.stringify(o));
+window.chrome = {
+  runtime: { id: "yds-test", getURL: (f) => "/" + f, onMessage: { addListener() {} }, lastError: null },
+  storage: {
+    sync: {
+      get: (keys, cb) => setTimeout(() => cb(copy(STORE)), 0),
+      set: (obj, cb) => { Object.assign(STORE, obj); cb && cb(); }
+    },
+    // Like the real thing, a write is announced to every listener, the writer
+    // included — which is also how a second tab hears about it.
+    local: {
+      get: (keys, cb) => setTimeout(() => cb(copy(LOCAL)), 0),
+      set: (obj, cb) => {
+        const changes = {};
+        for (const k of Object.keys(obj)) {
+          changes[k] = { oldValue: LOCAL[k], newValue: copy(obj[k]) };
+          LOCAL[k] = copy(obj[k]);
+        }
+        setTimeout(() => changeListeners.forEach(fn => fn(changes, "local")), 0);
+        cb && cb();
+      }
+    },
+    onChanged: { addListener: (fn) => changeListeners.push(fn) }
+  }
+};
+
+// The playing/paused state is ours to set: a data: URL never plays.
+const FAKE = { paused: true };
+const v = document.getElementById("v");
+Object.defineProperty(v, "paused", { get: () => FAKE.paused, configurable: true });
+Object.defineProperty(v, "currentTime", { get: () => 1, set() {}, configurable: true });
+// The Browser pane counts as a hidden tab; the card refuses to show in one.
+Object.defineProperty(document, "hidden", { get: () => false, configurable: true });
+
+// A minute of playback in about two seconds: every reading of the clock moves
+// it on by 125ms, and the render loop runs on a zero-delay timer.
+let clock = 0;
+performance.now = () => (clock += 125);
+window.requestAnimationFrame = (fn) => setTimeout(() => fn(0), 0);
+</script>
+<script src="../i18n.js"></script>
+<script src="../platform.js"></script>
+<script>
+// The single-page navigation of a real site: the address changes, nothing
+// reloads, and the new video's track arrives afterwards.
+let videoNumber = 1;
+const TRACK = { cues: [{ start: 0, end: 999, text: "a line of dialogue." }],
+                lang: "en", isAsr: false, isNativeTarget: true };
+window.__nextVideo = () => {
+  videoNumber++;
+  history.pushState({}, "", `?v=${videoNumber}`);
+  document.body.appendChild(document.createElement("i"));   // what the page's observer notices
+  setTimeout(() => window.__ctx.ingest({ ...TRACK, key: `mock-${videoNumber}` }), 100);
+};
+window.YDS_PLATFORMS = {
+  detect: () => "mock",
+  create: (id, ctx) => (window.__ctx = ctx, {
+    id: "mock",
+    requiresCcForTracks: false,
+    looksLikeVideoPage: () => true,
+    getVideoId: () => `mock-video-${videoNumber}`,
+    getVideoEl: () => v,
+    getContainer: () => document.getElementById("fake-player"),
+    isCcOn: () => true,
+    nativeLines: () => [],
+    observeTarget: () => document.getElementById("fake-player"),
+    start() {
+      ctx.onTrackList([{ languageCode: "en", kind: "", name: "English" }]);
+      ctx.ingest({ ...TRACK, key: "mock-1" });
+    },
+    requestTrack() {},
+    reset() {}
+  })
+};
+</script>
+<script src="../content.js"></script>
+<script>
+const results = [];
+const check = (n, p, d) => results.push({ n, p: !!p, d });
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const card = () => document.querySelector(".yds-rate");
+const pause = () => { FAKE.paused = true; v.dispatchEvent(new Event("pause")); };
+const play = () => { FAKE.paused = false; v.dispatchEvent(new Event("play")); };
+// Put the counter in a given state, as another tab or the popup would.
+const setRating = (r) => chrome.storage.local.set({ ydsRating: r });
+async function until(fn, ms) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) { if (fn()) return true; await sleep(25); }
+  return false;
+}
+
+(async () => {
+  await sleep(400);   // boot, settings, the counter read
+
+  // ---- counting ----
+  // Paused the whole time: a minute of clock passes, none of it counts.
+  await sleep(1500);
+  check("paused time is not counted", LOCAL.ydsRating.videos === 4, `videos=${LOCAL.ydsRating.videos}`);
+
+  pause();
+  await sleep(900);
+  check("no card before the fifth video", !card(), "");
+
+  // Playing: a minute of bilingual playback counts this video, once.
+  FAKE.paused = false;
+  const counted = await until(() => LOCAL.ydsRating.videos === 5, 6000);
+  check("a minute of bilingual playback counts the video", counted, `videos=${LOCAL.ydsRating.videos}`);
+  await sleep(1500);
+  check("the same video is counted only once", LOCAL.ydsRating.videos === 5, `videos=${LOCAL.ydsRating.videos}`);
+
+  // ---- the first card, after the 5th video ----
+  // A pause that is over in a moment (a seek, an ad) is not the moment.
+  pause();
+  await sleep(200);
+  play();
+  await sleep(900);
+  check("a brief pause shows nothing", !card(), "");
+  check("…and does not use up the ask", LOCAL.ydsRating.step === 0, JSON.stringify(LOCAL.ydsRating));
+
+  pause();
+  const shown = await until(() => card(), 1500);
+  check("a pause after the fifth video shows the card", shown, "");
+  check("showing it moves on to the popup's turn at once, so it is shown once even if ignored",
+        LOCAL.ydsRating.step === 1, JSON.stringify(LOCAL.ydsRating));
+  const c = card();
+  check("title is the i18n string", c && c.querySelector(".yds-rate-title").textContent === ydsT("rateTitle"),
+        c && c.querySelector(".yds-rate-title").textContent);
+  const link = c && c.querySelector("a.yds-rate-yes");
+  check("the link goes to the store's review page in a new tab",
+        link && link.href === "https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf/reviews"
+             && link.target === "_blank" && link.rel === "noopener", link && link.href);
+  check("it sits outside the player, so its clicks never reach it",
+        c && c.parentElement === document.documentElement, c && c.parentElement && c.parentElement.tagName);
+  check("the first card does not say it is the last", !(c && c.querySelector(".yds-rate-last")), "");
+  card() && card().querySelector(".yds-rate-no").click();
+  check("“No thanks” closes it", !card(), "");
+  await sleep(30);
+  check("…and is not a rating", !LOCAL.ydsRating.rated, JSON.stringify(LOCAL.ydsRating));
+
+  // ---- the popup's turn (step 1): never a card over the video ----
+  setRating({ videos: 9, step: 1 });
+  await sleep(50);
+  play(); pause();
+  await sleep(900);
+  check("while it is the popup's turn, no card over the video", !card(), "");
+
+  // ---- the last card, after the 15th video (step 2) ----
+  setRating({ videos: 14, step: 2 });
+  await sleep(50);
+  play(); pause();
+  await sleep(900);
+  check("after the popup line is closed, no card before the 15th video", !card(), "");
+  FAKE.paused = false;     // a fresh video's minute: this one was counted already
+  window.__nextVideo();
+  const fifteenth = await until(() => LOCAL.ydsRating.videos === 15, 6000);
+  check("the 15th video is counted", fifteenth, JSON.stringify(LOCAL.ydsRating));
+  pause();
+  await until(() => card(), 1500);
+  check("a pause after the 15th video shows the card again", !!card(), "");
+  check("…and that is the last step", LOCAL.ydsRating.step === 3, JSON.stringify(LOCAL.ydsRating));
+  const lastLine = card() && card().querySelector(".yds-rate-last");
+  check("…and the card says so", !!lastLine && lastLine.textContent === ydsT("rateLast"),
+        lastLine ? lastLine.textContent : "(no line)");
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+  check("Escape closes it", !card(), "");
+
+  setRating({ videos: 30, step: 3 });
+  await sleep(50);
+  play(); pause();
+  await sleep(900);
+  check("after the third ask, never again", !card(), "");
+
+  // ---- rating ends it, wherever it happens ----
+  setRating({ videos: 5, step: 0 });
+  await sleep(50);
+  play(); pause();
+  await until(() => card(), 1500);
+  const rate = card() && card().querySelector("a.yds-rate-yes");
+  if (rate) { rate.addEventListener("click", e => e.preventDefault()); rate.click(); }
+  await sleep(50);
+  check("“Rate it” is remembered, and the card goes", LOCAL.ydsRating.rated === true && !card(),
+        JSON.stringify(LOCAL.ydsRating));
+  setRating({ videos: 15, step: 2, rated: true });
+  await sleep(50);
+  play(); pause();
+  await sleep(900);
+  check("someone who has rated is never asked again, even when a card would be due", !card(), "");
+
+  // ---- the other ways out ----
+  setRating({ videos: 5, step: 0 });
+  await sleep(50);
+  play(); pause();
+  await until(() => card(), 1500);
+  card() && card().click();          // the dimmed area around the card
+  check("a click outside the card closes it", !card(), "");
+
+  setRating({ videos: 5, step: 0 });
+  await sleep(50);
+  play(); pause();
+  await until(() => card(), 1500);
+  check("(card back up for the next case)", !!card(), "");
+  play();
+  check("pressing play closes it", !card(), "");
+
+  const pass = results.filter(r => r.p).length;
+  document.getElementById("out").textContent =
+    results.map(r => `${r.p ? "PASS" : "FAIL"}  ${r.n}${r.d ? "   [" + r.d + "]" : ""}`).join("\n")
+    + `\n\n${pass}/${results.length} passed`;
+})();
+</script>

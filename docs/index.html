@@ -616,7 +616,7 @@
     <div class="container">
       <img class="hero-mark" src="icons/icon128.png" width="128" height="128" alt="" />
       <h1 data-en="Dual subtitles for your videos">为视频添加双语字幕</h1>
-      <div class="version-pill">v2.1.1</div>
+      <div class="version-pill">v2.1.2</div>
       <p class="sub" data-en="Currently supports <strong>YouTube</strong>, <strong>Vimeo</strong> and <strong>Bilibili</strong>. Uses the video's own subtitles plus free Google Translate, with optional Claude / OpenAI / Gemini / DeepSeek AI translation. Videos with no subtitles at all can be transcribed as they play.">
         目前支持 <strong>YouTube</strong>、<strong>Vimeo</strong> 和 <strong>Bilibili</strong>。使用视频自带字幕 + Google 免费翻译，也可选 Claude / OpenAI / Gemini / DeepSeek AI 翻译。完全没有字幕的视频，可以边播边听译。
       </p>
@@ -865,23 +865,18 @@ iwr "$repo/start.bat" -OutFile start.bat</pre>
       <h2 data-en="Changelog">更新日志</h2>
 
       <details open>
-        <summary data-en="2.1.1 — fixes for AI translation">2.1.1 — AI 翻译的几个修复</summary>
-        <p data-en="The paid API now actually offers itself. On videos where the player never published its caption list, 2.1.0 would wait for that list for ever and never ask whether to use your API — and switching translator mid-video left the button refusing to start. Both are fixed, and when the button cannot run it now says why, on the video, instead of failing quietly."><strong>付费 API 现在真的会主动问你了。</strong>有些视频播放器始终不公布字幕轨列表，2.1.0 会一直等下去、永远不弹确认框；在视频里换翻译源之后，按钮也会拒绝启动。两个都修好了。按钮用不了的时候，现在会在视频上直接说明原因，而不是默默失败。</p>
-        <p data-en="Provider errors read as one sentence. A rejected API key used to arrive as 200 characters of the provider&#39;s JSON, which also pushed the popup wider than the window. Now it says what went wrong and what to do about it."><strong>翻译源的报错变成一句人话。</strong>API Key 被拒绝时，以前会把对方返回的 200 字符 JSON 整段贴出来，还会把弹窗撑得比窗口还宽。现在只说出了什么问题、该怎么办。</p>
+        <summary data-en="2.1.2 — steadier subtitles">2.1.2 — 字幕更稳了</summary>
+        <p data-en="Subtitles no longer flicker when the line changes or sit on the player&#39;s controls when you pause, and new installs open a short page on getting started.">换句时字幕不再闪一下，暂停时也不再压住控制栏；新装的用户会先看到一页上手说明。</p>
       </details>
 
       <details>
-        <summary data-en="2.1.0 — two languages, one subtitle">2.1.0 — 双语合成一条字幕</summary>
-        <p data-en="<strong>One subtitle, two languages.</strong> The translation used to be a separate line pinned under the player&#39;s caption, two rows with two different looks, often fighting for the same space. Now both appear and change together, once per sentence. Auto-captions no longer scroll in word by word; a settled sentence takes their place. Want every video to look like that? Turn on &quot;Always draw both languages myself&quot;."><strong>一条字幕，两种语言。</strong>以前译文是另画一行贴在播放器字幕下面，两行各长各样，还常常挤在一起。现在两行一起出现、一起换，一句一次。自动生成字幕不再滚动出现文字，换成整理好的整句。想让所有视频都这样，打开「所有视频都由插件画双语」即可。</p>
-        <p data-en="<strong>Style it yourself, and the two languages need not match.</strong> Size, colour and background transparency for the original and the translation on their own, or locked together with one switch, and one tap puts everything back. Rounded plates hug the words, a soft shadow sits under the text, and the two rows stay tight without overlapping."><strong>外观归你调，原文译文可以不一样。</strong>字号、颜色、背景透明度，原文和译文各调各的，也能一个开关锁成同一套；调乱了一键恢复默认。圆角底板贴合文字、文字带柔和阴影，两行紧挨着又不重叠。</p>
-        <p data-en="<strong>Download the subtitles.</strong> Export as an .srt file. Choose both languages, the original alone or the translation alone. The filename carries the video, the channel and the languages in it."><strong>字幕可下载。</strong>导出成 .srt 格式。可选双语、仅原文、或仅译文。文件名包含视频名、频道名和语言。</p>
-        <p data-en="<strong>One key for the second language.</strong> ⌘⇧S on a Mac, Alt+Shift+S on Windows and Linux: switch between the original alone and both languages without opening the popup."><strong>一个快捷键开关字幕。</strong>Mac 上 ⌘⇧S，Windows / Linux 上 Alt+Shift+S，不用打开弹窗就能在原文和双语字幕之间随时切换。</p>
-        <p data-en="<strong>A better-looking interface.</strong> From one page of plain white system controls to a panel that was actually designed, with a new logo to go with it."><strong>优化界面。</strong>从一整页纯白的系统控件，到更有设计感的软件页面，并更新了 logo。</p>
-        <p data-en="<strong>Settings now have a front and a back.</strong> What you reach for often stays on the first screen: on and off, subtitle style, second language, translator, export. The gear in the top right opens subtitle appearance and panel language. The separate settings page that used to open in its own tab is gone."><strong>设置分了主次。</strong>常用的留在弹窗首页：开关、字幕样式、第二语言、翻译源、导出字幕。右上角的齿轮进去，是字幕外观和面板语言。原来那个要另开一个标签页的设置页，取消了。</p>
-        <p data-en="<strong>Pick the model — or type your own.</strong> After choosing Claude, OpenAI, Gemini or DeepSeek, pick which model of theirs to use and trade speed against quality yourself. The list is a shortlist of the current ones: choose “Custom…” and any other model name the provider accepts can be typed straight in, without waiting for the extension to catch up."><strong>AI 翻译可以选模型，也能自己填。</strong>选了 Claude / OpenAI / Gemini / DeepSeek 之后，还能挑具体用哪个型号，自己在速度和质量之间取舍。列表只是几个常用的——选「自定义…」，任何该服务支持的模型名都能直接填进去，不用等插件更新。</p>
-        <p data-en="<strong>You can watch the AI translation happen.</strong> On a long video it takes a good while before the first line changes, and until now nothing on screen said so — it just looked broken. A line now appears above the video: which translator is running, and how many lines are done. A failure, or a missing API key, says so in the same place instead of leaving you guessing."><strong>AI 翻译的进度，在视频上方看得见。</strong>长视频第一句换掉之前要等十几秒，以前这段时间屏幕上什么都没有，看着就像坏了。现在视频上方会显示一行：正在用哪个翻译、已经翻到第几条。翻译失败、或者没填 API Key，也在同一个地方说出来，而不是让你干等。</p>
-        <p data-en="<strong>Decide once how the paid API gets used.</strong> Three ways: ask on every video (the new default), use it on every video without asking, or never until you press the button yourself. It used to be ask-or-nothing, and nothing was the default — so a key you had entered might never be offered."><strong>付费 API 怎么用，你定一次就好。</strong>三选一：每个视频都问你（新的默认）、所有视频都直接用它、或者不点按钮就绝不调用。以前只有「问」和「不问」两种，而且默认是不问——填好的 Key 可能一次都不会被提起。</p>
-        <p data-en="<strong>Fixes.</strong> A video that opens with an ad no longer loses its subtitles; the first line no longer sits on top of the next two; the &quot;&gt;&gt;&quot; that marks a change of speaker in broadcast captions is no longer translated as if it were words; and YouTube&#39;s own auto-translation is no longer left switched on behind you."><strong>修复。</strong>开头有贴片广告的视频不再整段没有字幕；第一句不再压在后面两句上面；广播字幕里表示换人说话的「&gt;&gt;」不再被当成正文翻进译文；看完一个视频，YouTube 自己的自动翻译也不会被留在开着的状态。</p>
+        <summary data-en="2.1.1 — fixes for AI translation">2.1.1 — AI 翻译的几个修复</summary>
+        <p data-en="Fixed paid AI translation never offering itself and its button refusing to start after switching translator, and provider errors now read as one plain sentence.">修好了付费 AI 翻译不弹确认、换翻译源后按钮失灵的问题，翻译源的报错也改成了一句看得懂的话。</p>
+      </details>
+
+      <details>
+        <summary data-en="2.1.0 — two languages in one subtitle (inside the player&#39;s caption, or drawn entirely by HappySubs), subtitle export, a quick toggle, redesigned pages">2.1.0 — 双语合成一条字幕（嵌入原生字幕/完全代理）、可导出字幕、快捷开关、页面重新设置</summary>
+        <p data-en="Both languages now appear and change together as one subtitle, and auto-captions no longer scroll in word by word. The original and the translation can be styled separately, subtitles export as .srt, ⌘⇧S (Alt+Shift+S on Windows and Linux) toggles the second language, and the interface and settings were redesigned. AI translation lets you pick or type in a model, shows its progress on the video and offers three ways to use a paid API, alongside fixes such as videos with a pre-roll ad losing their subtitles.">双语合成一条字幕，两行一起出现、一起换，自动生成字幕也不再逐字滚动。原文和译文样式可以分开调，新增 .srt 导出和 ⌘⇧S（Windows / Linux 上 Alt+Shift+S）快捷开关，界面和设置也重新设计了。AI 翻译可以选模型或自己填，翻译进度显示在视频上方，付费 API 的调用方式可以三选一，并修复了开头有贴片广告时没有字幕等问题。</p>
       </details>
 
       <details>

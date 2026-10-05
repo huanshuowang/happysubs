@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HappySubs 已卸载</title>
+  <!-- Reached only from Chrome's uninstall hook; nobody should land here from a search. -->
+  <meta name="robots" content="noindex" />
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/icon32.png" />
+  <meta name="theme-color" content="#0f0f0f" />
+  <style>
+    /* Chrome opens this page by itself the moment the extension is removed
+       (background.js registers it). One question, one optional note — and
+       nothing at all is sent unless the person presses Send. Same palette as
+       the rest of the site. */
+    :root {
+      color-scheme: dark;
+      --bg: #0f0f0f;
+      --card: #1a1a1a;
+      --text: #f5f5f5;
+      --text-dim: #a3a3a3;
+      --brand: #ff0033;
+      --brand-2: #ff4d6d;
+      --border: rgba(255,255,255,0.08);
+      --border-surface: rgba(255,255,255,0.22);
+      --border-control: rgba(255,255,255,0.34);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      background:
+        radial-gradient(800px 380px at 50% -140px, rgba(255,0,51,0.14), transparent 70%),
+        var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", Roboto, sans-serif;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--brand-2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .wrap { max-width: 600px; margin: 0 auto; padding: 0 24px 56px; }
+
+    header { display: flex; align-items: center; justify-content: space-between; padding: 22px 0 8px; }
+    .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--text); font-weight: 700; font-size: 17px; }
+    .brand:hover { text-decoration: none; }
+    .brand svg { width: 24px; height: 24px; color: var(--brand); }
+    .lang-toggle {
+      background: transparent; color: var(--text-dim);
+      border: 1px solid var(--border-control); border-radius: 999px;
+      padding: 5px 12px; font: inherit; font-size: 13px; cursor: pointer;
+    }
+    .lang-toggle:hover { color: var(--text); background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.55); }
+
+    h1 { font-size: clamp(28px, 6vw, 36px); line-height: 1.2; letter-spacing: -0.02em; margin: 40px 0 12px; font-weight: 800; }
+    .lede { color: var(--text-dim); font-size: 16.5px; margin: 0 0 28px; }
+
+    form {
+      background: var(--card);
+      border: 1px solid var(--border-surface);
+      border-radius: 16px;
+      padding: 22px 22px 20px;
+    }
+    fieldset { border: 0; margin: 0; padding: 0; }
+    legend { font-weight: 700; font-size: 16px; margin: 0 0 12px; padding: 0; }
+    .choice {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 12px 14px; margin: 0 0 8px;
+      border: 1px solid var(--border-surface); border-radius: 12px;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+    .choice:hover { border-color: rgba(255,255,255,0.45); }
+    .choice:has(input:checked) { border-color: var(--brand); background: rgba(255,0,51,0.09); }
+    .choice input { accent-color: var(--brand); margin: 4px 0 0; width: 16px; height: 16px; flex: none; }
+    .choice span { font-size: 15px; }
+    .choice small { display: block; color: var(--text-dim); font-size: 13px; }
+
+    /* What opens under a chosen answer: the fix for "it didn't work", or a
+       box for the name when the answer is only useful with one. */
+    .under { margin: -2px 0 12px; }
+    .under[hidden] { display: none; }
+    .help {
+      padding: 12px 14px;
+      border-left: 2px solid var(--brand-2);
+      background: rgba(255,77,109,0.07);
+      border-radius: 0 10px 10px 0;
+      color: #e6e6e6; font-size: 14px;
+    }
+    .help + .follow-up { margin-top: 8px; }
+    .follow-up {
+      width: 100%;
+      background: #121212; color: var(--text);
+      border: 1px solid var(--border-surface); border-radius: 10px;
+      padding: 10px 12px; font: inherit; font-size: 14.5px;
+    }
+
+    label.notes { display: block; font-weight: 600; font-size: 14.5px; margin: 18px 0 8px; }
+    textarea {
+      width: 100%; min-height: 96px; resize: vertical;
+      background: #121212; color: var(--text);
+      border: 1px solid var(--border-surface); border-radius: 10px;
+      padding: 10px 12px; font: inherit; font-size: 14.5px;
+    }
+    textarea:focus-visible, .follow-up:focus-visible, .choice:has(input:focus-visible) { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+
+    .actions { display: flex; align-items: center; gap: 14px; margin-top: 16px; flex-wrap: wrap; }
+    button.send {
+      background: var(--brand); color: #fff; border: 0;
+      border-radius: 999px; padding: 11px 26px;
+      font: inherit; font-weight: 700; font-size: 15px; cursor: pointer;
+      box-shadow: 0 8px 20px rgba(255,0,51,0.28);
+    }
+    button.send:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
+    button.send:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+    .status { color: var(--text-dim); font-size: 13.5px; }
+
+    .done { text-align: left; }
+    .done[hidden], form[hidden], .fallback[hidden] { display: none; }
+    .done h2 { font-size: 22px; margin: 0 0 6px; }
+    .done p, .fallback p { color: var(--text-dim); margin: 0 0 6px; }
+    .fallback { background: var(--card); border: 1px solid var(--border-surface); border-radius: 16px; padding: 20px 22px; }
+
+    @media (max-width: 520px) {
+      .wrap { padding: 0 16px 40px; }
+      form { padding: 18px 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <a class="brand" href="./">
+        <svg viewBox="0 0 128 128" aria-hidden="true"><g fill="currentColor">
+          <rect x="27" y="10" width="28" height="71"/><rect x="73" y="10" width="28" height="71"/>
+          <rect x="27" y="37" width="74" height="17"/><rect x="9" y="95" width="110" height="23" rx="11.5"/>
+        </g></svg>
+        HappySubs
+      </a>
+      <button class="lang-toggle" id="langToggle" type="button" aria-label="Switch to English">EN</button>
+    </header>
+
+    <main>
+      <h1 data-en="HappySubs has been removed">HappySubs 已卸载</h1>
+      <p class="lede" data-en="Could you spare ten seconds to tell me why? I'm an independent developer, and your feedback makes this product better. Thank you!">可以花 10 秒告诉我为什么吗？我是一个独立开发者，你的反馈会让我的产品变得更好。感谢！</p>
+
+      <form id="survey" novalidate>
+        <fieldset>
+          <legend data-en="Why did you remove it?">为什么卸载了呢？</legend>
+
+          <label class="choice">
+            <input type="radio" name="reason" value="not-needed" />
+            <span data-en="I don't need it anymore">不再需要了</span>
+          </label>
+
+          <label class="choice">
+            <input type="radio" name="reason" value="setup" />
+            <span data-en="It was too hard to install or set up<small>Including: installed, but a second subtitle never showed up</small>">装不上，或者设置太麻烦<small>装好了却一直没看到双语字幕，也选这个</small></span>
+          </label>
+          <div class="under" data-for="setup" hidden>
+            <div class="help" data-en='On YouTube, the player&#39;s own <strong>CC</strong> button (bottom right) has to be on before HappySubs has anything to translate — and video pages that were open before the install need a refresh. If that was it, <a href="https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf?utm_source=uninstall&amp;utm_medium=help" target="_blank" rel="noopener">reinstall it</a> and give it another go.'>
+              YouTube 上要先打开播放器右下角的 <strong>CC</strong>，HappySubs 才拿得到字幕；安装前就开着的视频页也要先刷新一次。如果是这个原因，<a href="https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf?utm_source=uninstall&amp;utm_medium=help" target="_blank" rel="noopener">重新装上</a>再试一次就好。
+            </div>
+          </div>
+
+          <label class="choice">
+            <input type="radio" name="reason" value="stopped" />
+            <span data-en="It stopped working<small>It worked at first, then the subtitles stopped appearing</small>">用着用着失效了<small>一开始能用，后来字幕不出来了</small></span>
+          </label>
+          <div class="under" data-for="stopped" hidden>
+            <div class="help" data-en="A page refresh usually brings it back. If it doesn't, telling me which site or video it broke on helps me find the cause faster.">刷新一下页面通常就能恢复。如果还不行，告诉我是在哪个网站或视频上失效的，能帮助我更快找到原因。</div>
+            <input class="follow-up" type="text" maxlength="200" autocomplete="off"
+                   placeholder="在哪个网站或视频上？（可选）"
+                   data-en-placeholder="Which site or video? (optional)" />
+          </div>
+
+          <label class="choice">
+            <input type="radio" name="reason" value="quality" />
+            <span data-en="The translation or subtitles weren't good enough<small>Out of sync, poor translation, in the way of the picture…</small>">翻译或字幕效果不好<small>不同步、翻得差、挡住画面……</small></span>
+          </label>
+
+          <label class="choice">
+            <input type="radio" name="reason" value="site" />
+            <span data-en="It doesn't support the site I watch on">不支持我要用的网站</span>
+          </label>
+          <div class="under" data-for="site" hidden>
+            <input class="follow-up" type="text" maxlength="200" autocomplete="off"
+                   placeholder="哪个网站？比如 Netflix、Coursera（可选）"
+                   data-en-placeholder="Which site? Netflix, Coursera… (optional)" />
+          </div>
+
+          <label class="choice">
+            <input type="radio" name="reason" value="better" />
+            <span data-en="I found a better dual-subtitle extension">找到了更好用的双语字幕插件</span>
+          </label>
+          <div class="under" data-for="better" hidden>
+            <input class="follow-up" type="text" maxlength="200" autocomplete="off"
+                   placeholder="是哪一个？（可选）"
+                   data-en-placeholder="Which one? (optional)" />
+          </div>
+
+          <label class="choice">
+            <input type="radio" name="reason" value="other" />
+            <span data-en="Something else">其他原因</span>
+          </label>
+        </fieldset>
+
+        <label class="notes" for="notes" data-en="Anything else you'd like to say? (optional)">还有什么想说的吗？（可选）</label>
+        <textarea id="notes" name="notes" maxlength="2000"
+                  placeholder="比如是哪个视频出了问题，或者希望加什么功能"
+                  data-en-placeholder="A video that went wrong, or something you wish it did"></textarea>
+
+        <div class="actions">
+          <button class="send" id="send" type="submit" disabled data-en="Send">发送</button>
+          <span class="status" id="status" role="status"></span>
+        </div>
+      </form>
+
+      <section class="done" id="done" hidden>
+        <h2 data-en="Got it — thank you.">收到了，谢谢你。</h2>
+        <p data-en='Changed your mind? <a href="https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf?utm_source=uninstall&amp;utm_medium=thanks" target="_blank" rel="noopener">Reinstall HappySubs</a>'>改主意了？<a href="https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf?utm_source=uninstall&amp;utm_medium=thanks" target="_blank" rel="noopener">重新安装 HappySubs</a></p>
+      </section>
+
+      <section class="fallback" id="fallback" hidden>
+        <p data-en='The feedback form isn&#39;t open right now. If you have a minute, <a href="https://github.com/huanshuowang/happysubs/issues/new" target="_blank" rel="noopener">leave a note on GitHub</a> instead.'>反馈表暂时没开。有空的话，可以<a href="https://github.com/huanshuowang/happysubs/issues/new" target="_blank" rel="noopener">在 GitHub 上留言</a>。</p>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    // Where answers go: a Google Form, posted to directly so the page keeps the
+    // site's look. The person filling this in never sees that form.
+    //
+    // The reason is a multiple-choice question there, and Google only accepts
+    // an answer that matches one of its options exactly — so REASON_LABELS
+    // below must stay word for word what the form's options say. Rename an
+    // option in the form without changing it here and that answer is dropped.
+    const FORM = {
+      action: "https://docs.google.com/forms/d/e/1FAIpQLSfaH_FHFu1p_oR2uOyi8cmvFk04XS0kz9XNwA_chMo-nuMUxg/formResponse",
+      reason: "entry.2863356",     // 卸载原因 (multiple choice)
+      which: "entry.372882796",     // 具体是哪个 (the site, video or extension, when asked)
+      notes: "entry.1694125152",    // 补充说明
+      version: "entry.186220609",   // 插件版本, from ?v= on this page's URL
+      lang: "entry.1675081698"      // 界面语言, zh | en, whichever the page was showing
+    };
+    const REASON_LABELS = {
+      "not-needed": "不再需要了",
+      "setup": "装不上，或者设置太麻烦",
+      "stopped": "用着用着失效了",
+      "quality": "翻译或字幕效果不好",
+      "site": "不支持我要用的网站",
+      "better": "找到了更好用的双语字幕插件",
+      "other": "其他原因"
+    };
+
+    const params = new URLSearchParams(location.search);
+
+    // ---- language ----
+    // The extension says which language its panel was in (?lang=), and that
+    // wins: the person was reading HappySubs in it a moment ago. Otherwise the
+    // site's own remembered choice, and failing that the browser's language.
+    (function () {
+      const STORAGE_KEY = "yds-site-lang";
+      const TITLES = { zh: "HappySubs 已卸载", en: "HappySubs has been removed" };
+      const TOGGLE_LABEL = { zh: "EN", en: "中" };
+      const nodes = Array.from(document.querySelectorAll("[data-en]"));
+      nodes.forEach(n => { n.dataset.zh = n.innerHTML; });
+      const placeholders = Array.from(document.querySelectorAll("[data-en-placeholder]"));
+      placeholders.forEach(n => { n.dataset.zhPlaceholder = n.getAttribute("placeholder") || ""; });
+      const toggleBtn = document.getElementById("langToggle");
+
+      function apply(lang) {
+        const key = lang === "en" ? "en" : "zh";
+        nodes.forEach(n => {
+          const html = key === "en" ? n.dataset.en : n.dataset.zh;
+          if (html != null) n.innerHTML = html;
+        });
+        placeholders.forEach(n => {
+          n.setAttribute("placeholder", key === "en" ? n.dataset.enPlaceholder : n.dataset.zhPlaceholder);
+        });
+        document.documentElement.lang = key === "en" ? "en" : "zh-Hans";
+        document.title = TITLES[key];
+        toggleBtn.textContent = TOGGLE_LABEL[key];
+        toggleBtn.setAttribute("aria-label", key === "en" ? "切换到中文" : "Switch to English");
+      }
+
+      const fromExtension = params.get("lang");
+      let saved = null;
+      try { saved = localStorage.getItem(STORAGE_KEY); } catch {}
+      apply(fromExtension === "zh" || fromExtension === "en" ? fromExtension
+            : saved || (/^zh/i.test(navigator.language || "") ? "zh" : "en"));
+
+      toggleBtn.addEventListener("click", () => {
+        const next = document.documentElement.lang.startsWith("zh") ? "en" : "zh";
+        try { localStorage.setItem(STORAGE_KEY, next); } catch {}
+        apply(next);
+      });
+    })();
+
+    // ---- the survey ----
+    (function () {
+      const form = document.getElementById("survey");
+      const send = document.getElementById("send");
+      const status = document.getElementById("status");
+
+      // Nowhere to send answers yet: say so plainly rather than take them and
+      // drop them on the floor.
+      if (!FORM.action || !FORM.reason) {
+        form.hidden = true;
+        document.getElementById("fallback").hidden = false;
+        return;
+      }
+
+      const raw = params.get("v") || "";
+      const version = /^[0-9][0-9.]{0,19}$/.test(raw) ? raw : "";
+      const picked = () => form.querySelector("input[name=reason]:checked");
+
+      form.addEventListener("change", (e) => {
+        if (e.target.name !== "reason") return;
+        const reason = picked();
+        send.disabled = !reason;
+        for (const under of form.querySelectorAll(".under")) {
+          under.hidden = !reason || under.dataset.for !== reason.value;
+        }
+      });
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const reason = picked();
+        if (!reason) return;
+        const zh = document.documentElement.lang.startsWith("zh");
+        // Only the box under the chosen answer counts; one typed into and then
+        // abandoned for a different answer is not about that answer.
+        const followUp = form.querySelector(`.under[data-for="${reason.value}"] .follow-up`);
+        const body = new URLSearchParams();
+        body.set(FORM.reason, REASON_LABELS[reason.value]);
+        if (FORM.which) body.set(FORM.which, followUp ? followUp.value.trim() : "");
+        if (FORM.notes) body.set(FORM.notes, document.getElementById("notes").value.trim());
+        if (FORM.version) body.set(FORM.version, version);
+        if (FORM.lang) body.set(FORM.lang, zh ? "zh" : "en");
+        send.disabled = true;
+        status.textContent = zh ? "发送中…" : "Sending…";
+        try {
+          // Google Forms does not answer cross-origin requests, so the response
+          // is opaque: getting one at all is the only success there is to see.
+          await fetch(FORM.action, { method: "POST", mode: "no-cors", body });
+          form.hidden = true;
+          document.getElementById("done").hidden = false;
+        } catch {
+          send.disabled = false;
+          status.textContent = zh ? "没发出去，再试一次？" : "That didn't go through. Try again?";
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

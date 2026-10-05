@@ -91,6 +91,65 @@ function localizeStaticDom() {
   $("editApiKey").textContent = ydsT("edit");
 }
 
+// The rating line at the top of the panel — the second of the three asks that
+// content.js schedules (see "rating request" there). Its turn comes once the
+// card over the video has been and gone without a rating (step 1), from the
+// 8th video watched for a minute. It stays until rated or closed; closing it
+// hands the last ask, at the 15th video, back to the video.
+const RATE_BANNER_AFTER = 8;
+async function initRateBanner() {
+  let state;
+  try { state = (await chrome.storage.local.get(["ydsRating"])).ydsRating || {}; } catch { return; }
+  if (state.rated || (state.step | 0) !== 1 || (state.videos | 0) < RATE_BANNER_AFTER) return;
+  const banner = $("rateBanner");
+  banner.hidden = false;
+  // Written in the click itself, from what was read on opening: following the
+  // link closes the popup, and a read-then-write could be cut off half done.
+  const save = (change) => {
+    banner.hidden = true;
+    try { chrome.storage.local.set({ ydsRating: { ...state, ...change } }); } catch {}
+  };
+  $("rateGo").addEventListener("click", () => save({ rated: true }));
+  $("rateClose").addEventListener("click", () => save({ step: 2 }));
+}
+
+// The keyboard shortcut, at the foot of the panel — the one place everyone
+// opens, so it is where people learn there is one. Read from Chrome rather
+// than assumed: the viewer can rebind it, and Chrome leaves it unassigned when
+// another extension already holds those keys.
+async function renderShortcutHint() {
+  const el = $("shortcutHint");
+  let cmd = null;
+  try { cmd = ((await chrome.commands.getAll()) || []).find(c => c.name === "toggle-subtitles"); } catch {}
+  if (!cmd) { el.hidden = true; return; }
+  el.replaceChildren();
+  if (cmd.shortcut) {
+    // Chrome writes it as "⇧⌘S" on a Mac and "Alt+Shift+S" everywhere else.
+    const keys = cmd.shortcut.includes("+") ? cmd.shortcut.split("+") : [...cmd.shortcut];
+    const group = document.createElement("span");
+    group.className = "keys";
+    for (const k of keys) {
+      const kbd = document.createElement("kbd");
+      kbd.textContent = k;
+      group.appendChild(kbd);
+    }
+    const [before, after] = ydsT("shortcutHint").split("{key}").map(t => (t || "").trim());
+    if (before) el.append(before);
+    el.append(group);
+    if (after) el.append(after);
+  } else {
+    const link = document.createElement("a");
+    link.href = "#";
+    link.textContent = ydsT("shortcutSet");
+    link.addEventListener("click", (e) => {
+      e.preventDefault();
+      chrome.tabs.create({ url: "chrome://extensions/shortcuts" });
+    });
+    el.append(ydsT("shortcutUnset"), link);
+  }
+  el.hidden = false;
+}
+
 let activeTabId = null;
 let apiKeySaveTimer = null;
 let statusPollTimer = null;
@@ -840,6 +899,8 @@ async function init() {
   // setting afterwards would flash the browser-default language on every open.
   ydsSetUiLang(settings.uiLang);
   localizeStaticDom();
+  initRateBanner();
+  renderShortcutHint();
 
   $("enabled").checked = !!settings.enabled;
   $("uiLang").value = settings.uiLang || "auto";
@@ -927,6 +988,7 @@ async function init() {
     await save({ uiLang: value });
     ydsSetUiLang(value);
     localizeStaticDom();
+    renderShortcutHint();
     // Re-rendering the static text wipes the gear's own state back to its
     // default glyph, and puts the takeover note back to its "off" wording, so
     // both are restored here.
