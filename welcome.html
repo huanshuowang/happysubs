@@ -73,20 +73,23 @@
        Two columns: what to do, and that same thing happening. The demo spans
        every row on the right; on a narrow window it drops in under the
        headline so it is still seen before the steps it illustrates. */
+    /* Left: the two things to set (language, automatic sites). Right: what
+       happens — the demo, then the three steps it shows, then a video to
+       try it on. Each column reads top to bottom on its own. */
     .first {
       display: grid;
-      grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.28fr);
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr);
       grid-template-areas:
-        "head  demo"
-        "steps demo"
-        "cta   demo";
-      grid-template-rows: auto auto auto;
-      column-gap: 48px;
+        "head demo"
+        "head steps"
+        "head cta";
+      grid-template-rows: auto auto 1fr;
+      column-gap: 56px;
       align-content: center;
       min-height: calc(100vh - 68px);
       padding: 0 0 36px;
     }
-    .head { grid-area: head; align-self: end; }
+    .head { grid-area: head; align-self: center; }
     .eyebrow {
       display: inline-flex; align-items: center; gap: 7px;
       color: #c9f5d4; font-size: 13px; font-weight: 600;
@@ -114,16 +117,9 @@
       display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
       margin: 16px 0 0; padding: 11px 12px 11px 14px;
       max-width: 34em;
-      background: linear-gradient(135deg, rgba(255,0,51,0.16), rgba(255,0,51,0.05));
-      border: 1px solid rgba(255,0,51,0.55);
+      background: rgba(255,0,51,0.07);
+      border: 1px solid rgba(255,0,51,0.4);
       border-radius: 13px;
-      box-shadow: 0 0 0 4px rgba(255,0,51,0.06), 0 10px 30px rgba(255,0,51,0.12);
-      /* Two soft pulses once the page is up, to draw the eye here first. */
-      animation: pick-glow 1.3s ease-in-out 0.8s 2;
-    }
-    @keyframes pick-glow {
-      0%, 100% { box-shadow: 0 0 0 4px rgba(255,0,51,0.06), 0 10px 30px rgba(255,0,51,0.12); }
-      50%      { box-shadow: 0 0 0 7px rgba(255,0,51,0.20), 0 10px 34px rgba(255,0,51,0.30); }
     }
     .pick label {
       display: inline-flex; align-items: center; gap: 8px;
@@ -157,49 +153,119 @@
       .pick { animation: none; }
     }
 
-    /* The steps light up as the demo reaches them. Each one's --on runs from 0
-       to 1 on the demo's clock; everything that marks a step as current is
-       mixed by it, so they ease in and out together. */
-    .steps { grid-area: steps; list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 2px; }
-    .step {
-      display: grid;
-      grid-template-columns: 30px minmax(0, 1fr);
-      column-gap: 14px;
-      padding: 8px 14px 9px;
-      margin-left: -14px;
-      border-radius: 12px;
-      border: 1px solid rgba(255,0,51, calc(0.42 * var(--on)));
-      background: rgba(255,0,51, calc(0.08 * var(--on)));
+    /* Three steps in a row under the demo they describe. Static: the demo
+       already moves, and steps lighting up beside it was a second thing
+       moving for the eye to follow. */
+    .steps {
+      grid-area: steps; list-style: none; margin: 22px 0 0; padding: 0;
+      display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px;
     }
-    .step-1 { animation: on1 var(--loop) infinite; }
-    .step-2 { animation: on2 var(--loop) infinite; }
-    .step-3 { animation: on3 var(--loop) infinite; }
-    @keyframes on1 { 0%, 3% { --on: 0; } 6%, 19% { --on: 1; } 22%, 100% { --on: 0; } }
-    @keyframes on2 { 0%, 20% { --on: 0; } 23%, 34% { --on: 1; } 37%, 100% { --on: 0; } }
-    @keyframes on3 { 0%, 34% { --on: 0; } 37%, 89% { --on: 1; } 93%, 100% { --on: 0; } }
+    .step { display: block; }
     .num {
-      grid-row: span 2;
-      width: 30px; height: 30px; border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-weight: 800; font-size: 14px; color: #fff;
-      border: 1.5px solid color-mix(in srgb, var(--brand) calc(var(--on) * 100%), rgba(255,255,255,0.34));
-      background: rgba(255,0,51, var(--on));
+      width: 24px; height: 24px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 12.5px; color: var(--text-dim);
+      border: 1px solid rgba(255,255,255,0.3);
+      margin-bottom: 8px;
     }
-    .step h2 { font-size: 16.5px; line-height: 30px; margin: 0; }
-    .step p { grid-column: 2; margin: 0; color: var(--text-dim); font-size: 14px; line-height: 1.55; }
-    .step strong { color: var(--text); font-weight: 600; }
+    .step h2 { font-size: 15px; line-height: 1.35; margin: 0 0 4px; }
+    .step p { margin: 0; color: var(--text-dim); font-size: 13.5px; line-height: 1.55; }
+    .step strong { color: var(--text-dim); font-weight: 600; }
 
-    .cta-block { grid-area: cta; align-self: start; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 18px; }
+    .cta-block { grid-area: cta; align-self: start; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 24px; }
     .cta {
       display: inline-flex; align-items: center;
       background: var(--brand); color: #fff;
-      padding: 12px 24px; border-radius: 999px;
-      font-weight: 700; font-size: 15.5px;
-      box-shadow: 0 8px 20px rgba(255,0,51,0.3);
+      padding: 10px 22px; border-radius: 999px;
+      font-weight: 700; font-size: 15px;
       transition: transform .15s, box-shadow .15s;
     }
-    .cta:hover { text-decoration: none; transform: translateY(-1px); box-shadow: 0 10px 24px rgba(255,0,51,0.4); }
+    .cta:hover { text-decoration: none; background: var(--brand-2); }
     .cta-note { color: var(--text-dim); font-size: 13px; margin: 0; }
+
+    /* ---- sites that need the viewer's say-so (optional permissions) ---- */
+    .more { padding: 26px 0 30px; border-top: 1px solid var(--border); }
+    /* On a fresh install the two switches sit in the first screen, under the
+       language picker (welcome.js moves them into the headline column) — a
+       feature that needs a click to exist should not be a scroll away. */
+    .head .more { border-top: 0; padding: 18px 0 2px; }
+    .head .more h2 { font-size: 15px; color: var(--text-dim); font-weight: 600; margin: 0 0 10px; }
+    .head .more .more-note { font-size: 13px; margin: 0 0 10px; }
+    .more-note:empty, .more-item p:empty { display: none; }
+    /* The update intro and the note above the switches are two sentences on
+       two lines; the strings carry the break. */
+    body.whatsnew .lede, .more-note { white-space: pre-line; }
+    /* Install page: two plain rows with a divider, not two more boxes. */
+    .head .more {
+      margin-top: 22px; padding: 14px 16px 4px;
+      border: 1px solid var(--border); border-radius: 13px;
+    }
+    .head .more h2 { color: var(--brand-2); font-size: 15.5px; font-weight: 700; }
+    /* Three pulses of the border once the page is up, only while a site is
+       still off — the one thing on this page that does not work until asked. */
+    .head .more.ask {
+      border-color: rgba(255,0,51,0.45);
+      animation: more-ask 1.2s ease-in-out 1s 3;
+    }
+    @keyframes more-ask {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(255,0,51,0); border-color: rgba(255,0,51,0.45); }
+      50%      { box-shadow: 0 0 0 5px rgba(255,0,51,0.18); border-color: rgba(255,0,51,0.9); }
+    }
+    @media (prefers-reduced-motion: reduce) { .head .more.ask { animation: none; } }
+    .head .more-list { grid-template-columns: 1fr; gap: 0; }
+    .head .more-item {
+      border: 0; border-radius: 0; padding: 11px 0;
+      border-top: 1px solid var(--border);
+    }
+    .head .more-item:last-child { padding-bottom: 10px; }
+    .head .more-item strong { font-size: 14.5px; font-weight: 600; }
+    .head .more-btn {
+      background: transparent; color: var(--text); font-size: 13px; font-weight: 600;
+      border: 1px solid rgba(255,255,255,0.35); padding: 6px 14px;
+    }
+    .head .more-btn:hover { border-color: rgba(255,255,255,0.7); }
+    .head .more-btn.on { color: var(--text-dim); border-color: var(--border); }
+    .more h2 { font-size: 19px; margin: 0 0 6px; }
+    .more-note { color: var(--text-dim); font-size: 14px; margin: 0 0 16px; max-width: 62ch; }
+    .more-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .more-item {
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px;
+    }
+    .more-item strong { display: block; font-size: 15.5px; color: var(--text); }
+    .more-item p { margin: 3px 0 0; color: var(--text-dim); font-size: 13.5px; line-height: 1.5; }
+    .more-btn {
+      flex: 0 0 auto; border: 0; cursor: pointer; font: inherit;
+      background: var(--brand); color: #fff; font-weight: 700; font-size: 14px;
+      padding: 9px 18px; border-radius: 999px;
+    }
+    .more-btn.on { background: transparent; color: var(--text-dim); border: 1px solid var(--border); padding: 8px 14px; }
+    .more-btn.on:hover { color: var(--text); }
+    /* Opened after an update rather than an install: the getting-started
+       steps are old news, the new sites are the point. */
+    body.whatsnew .steps, body.whatsnew .cta-block, body.whatsnew .demo, body.whatsnew .pick { display: none; }
+    /* The install layout is a two-column grid a screen tall, built around the
+       demo. With the demo gone that is a headline floating in an empty page
+       and the buttons a scroll away — so here it is one plain column, and
+       the buttons come straight after the headline (welcome.js moves them). */
+    body.whatsnew .first { display: block; min-height: 0; padding: 56px 0 8px; }
+    /* Update page: the same box as on install, under the headline. The
+       intro above it already says what auto does, so no second note. */
+    body.whatsnew .head .more { max-width: 560px; margin-top: 26px; }
+    body.whatsnew .more .more-note { display: none; }
+    .more-btn { white-space: nowrap; }
+    .lang-row { display: none; }
+    body.whatsnew .lang-row {
+      display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+      max-width: 560px; margin: 18px 0 0; padding: 0 2px;
+      color: var(--text-dim); font-size: 14px;
+    }
+    body.whatsnew .lang-row strong { color: var(--text); font-weight: 600; }
+    .log { display: none; padding: 26px 0 30px; border-top: 1px solid var(--border); }
+    body.whatsnew .log { display: block; }
+    .log h2 { font-size: 15px; color: var(--text-dim); font-weight: 600; margin: 0 0 14px; letter-spacing: 0.04em; }
+    .log p { color: var(--text-dim); font-size: 14.5px; line-height: 1.6; margin: 0 0 7px; max-width: 78ch; }
+    .log strong { color: var(--text); font-weight: 600; }
 
     /* ---- the demo ----
        A browser window drawn in CSS, so it reads as a picture of the steps
@@ -362,7 +428,7 @@
     /* Nothing moves for anyone who asked for less motion: the finished frame,
        captions on and both lines showing, and no step singled out. */
     @media (prefers-reduced-motion: reduce) {
-      .step-1, .step-2, .step-3, .tb-hs, .sub-src, .sub-tr, .cc::after, .cursor, .ripple { animation: none; }
+      .tb-hs, .sub-src, .sub-tr, .cc::after, .cursor, .ripple { animation: none; }
       .sub { opacity: 1; }
       .cc::after { transform: scaleX(1); }
       .cursor, .ripple { display: none; }
@@ -396,11 +462,16 @@
       .first {
         grid-template-columns: minmax(0, 1fr);
         grid-template-areas: "head" "demo" "steps" "cta";
+        grid-template-rows: auto;
         min-height: 0;
         padding-top: 12px;
       }
       .demo { margin-top: 24px; }
       .tips ul { grid-template-columns: 1fr; }
+      .more-list { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 640px) {
+      .steps { grid-template-columns: 1fr; gap: 14px; }
     }
     @media (max-width: 520px) {
       .wrap { padding: 0 16px; }
@@ -432,7 +503,7 @@
         <div class="head">
           <div class="eyebrow" data-t="eyebrow">Installed</div>
           <h1 data-html="headline">You're set.<br>On YouTube, <em>turn on CC</em> first.</h1>
-          <p class="lede" data-t="lede">HappySubs translates the captions a video already has. On Vimeo and Bilibili there's nothing to switch on.</p>
+          <p class="lede" data-t="lede">HappySubs translates the captions a video already has. On Vimeo, Bilibili and Zoom recordings there's nothing to switch on.</p>
           <div class="pick">
             <label for="secondLang"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0 0 14.07 6H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/></svg><span data-t="pickLabel">Translate subtitles into</span></label>
             <select id="secondLang"></select>
@@ -500,6 +571,48 @@
             <span class="cursor" aria-hidden="true"><svg viewBox="0 0 20 24"><path d="M2 1.5v18.2l4.6-4.4 3 6.9 3.3-1.4-3-6.8h6.5z" fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg></span>
           </div>
         </figure>
+      </section>
+
+      <section class="more" id="more">
+        <h2 data-t="moreTitle">Turn on auto</h2>
+        <p class="more-note" data-t="moreNote"></p>
+        <div class="more-list">
+          <div class="more-item">
+            <div>
+              <strong data-t="moreZoomTitle">Zoom recordings</strong>
+              <p data-t="moreZoomBody">Bilingual subtitles and a translated transcript on Zoom cloud recordings.</p>
+            </div>
+            <button type="button" class="more-btn" data-site="zoom">Turn on</button>
+          </div>
+          <div class="more-item">
+            <div>
+              <strong data-t="moreEmbedTitle">YouTube videos on other sites</strong>
+              <p data-t="moreEmbedBody">For pages that embed YouTube's privacy-enhanced player.</p>
+            </div>
+            <button type="button" class="more-btn" data-site="embed">Turn on</button>
+          </div>
+        </div>
+      </section>
+
+      <div class="lang-row" id="langRow">
+        <span><strong data-t="langCardTitle">Three new interface languages</strong> · <span data-t="langCardBody"></span></span>
+        <select class="lang-select" id="pageLang2" aria-label="Language">
+          <option value="en">English</option>
+          <option value="zh">简体中文</option>
+          <option value="zh-Hant">繁體中文</option>
+          <option value="ja">日本語</option>
+          <option value="vi">Tiếng Việt</option>
+        </select>
+      </div>
+
+      <section class="log" id="log">
+        <h2 data-t="logTitle">What changed in 2.2.0</h2>
+        <p data-html="log1"></p>
+        <p data-html="log2"></p>
+        <p data-html="log3"></p>
+        <p data-html="log4"></p>
+        <p data-html="log5"></p>
+        <p data-html="log6"></p>
       </section>
 
       <section class="tips">

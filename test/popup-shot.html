@@ -26,6 +26,16 @@ const Q = new URLSearchParams(location.search);
 const VIEW   = Q.get("view")   || "main";
 const SCHEME = Q.get("scheme") || "dark";
 
+// ?live= picks the live-transcription state the popup is shown in.
+const LIVE = ({
+  current: { active: true, status: "listening", detail: "", server: { type: "hello", version: "2.2.0", refine: true } },
+  old:     { active: true, status: "listening", detail: "", server: null },
+  nomodel: { active: true, status: "listening", detail: "", server: { type: "hello", version: "2.2.0", refine: false } },
+  down:    { active: true, status: "unavailable", detail: "" },
+  off:     { active: false, status: "stopped", detail: "" }
+})[Q.get("live") || "off"];
+if (Q.get("live")) { try { localStorage.setItem("yds-popup-tab", "live"); } catch {} }
+
 const STORE = { ydsSettings: {
   enabled: true, secondLang: "zh-Hans", uiLang: Q.get("uiLang") || "en", translationOnly: false,
   bottomOffset: 22, fontSize: 22, color: "#ffffff", background: "rgba(0,0,0,0.6)",
@@ -51,8 +61,10 @@ window.chrome = {
       tracks: [{ languageCode: "en", kind: "asr", name: "English (auto)" }],
       translations: [], settings: STORE.ydsSettings, nativeCaptionText: "",
       translationStatus: { mode: "translated", provider: "google", cueCount: 184 },
-      preCuesLoaded: 184, usingNativeTrack: false,
-      live: { active: false, status: "stopped", detail: "" }
+      // A live-transcription shot is a page with no track (a local video):
+      // otherwise the panel adds "this video has a track" to every state.
+      preCuesLoaded: Q.get("live") ? 0 : 184, usingNativeTrack: false,
+      live: LIVE
     })
   }
 };

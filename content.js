@@ -17,6 +17,13 @@
 //   the fly with a small debounce.
 
 (() => {
+  // One copy per page. On a site the viewer set to always-on, the registered
+  // script may still be waiting for a video when they open the popup, and the
+  // popup — getting no answer yet — injects again. Two copies would each
+  // attach and draw.
+  if (window.__ydsContentLoaded) return;
+  window.__ydsContentLoaded = true;
+
   const DEBUG = true;
   const log = (...a) => { if (DEBUG) console.log("[YDS]", ...a); };
 
@@ -73,6 +80,16 @@
       // anyone who prefers the player's own caption.
       takeoverCaptions: true,
       translationOnly: false,
+      // Put a translation under each paragraph of a site's own transcript
+      // panel (Zoom's "Audio Transcript"). Sites without one ignore it.
+      transcriptPanelBilingual: true,
+      // Live transcription's own translator and model, set in the Live tab and
+      // independent of the subtitle translator above: free Google for tracks
+      // and a paid model for live speech is a sensible pair. Its API keys are
+      // its own too, so the two can be billed and revoked separately.
+      liveProvider: "google",
+      liveModels: {},          // { claude?, openai?, gemini?, deepseek? }
+      liveApiKeys: {},         // same shape as apiKeys
       // "manual" — only the popup's button starts a paid translation
       // "ask"    — offer it on each video (the default: a paid key that is
       //            never offered is a key the viewer wonders about)
@@ -1119,9 +1136,24 @@
     return LANG_NAMES[k] || code;
   }
 
-  function buildLLMPrompt(texts, tl) {
+  // context: optional earlier lines, [{source, text}], given so the model can
+  // resolve what a short line refers to — live transcription sends one
+  // sentence at a time, and "Great." alone cannot be told from sarcasm.
+  function buildLLMPrompt(texts, tl, context) {
     const name = langNameForPrompt(tl);
     const taggedCaptions = texts.map((text, i) => `[${i + 1}] ${text}`).join("\n");
+    const earlier = (context || []).filter(c => c && c.source);
+    // Chinese subtitle conventions (Netflix Simplified Chinese style guide):
+    // short lines, established names, the middle dot between given and family
+    // names. Only for Chinese — the dot means nothing in other scripts.
+    const zhRules = /^zh/i.test(String(tl || ""))
+      ? `- Keep each line short, as a subtitle: about 16 Chinese characters is ideal, cut filler words rather than run long
+- For people and places use the established Chinese name if there is one; otherwise transliterate. Separate given and family names with a full-width middle dot, e.g. 卡尔·拉格斐
+`
+      : "";
+    const contextBlock = earlier.length
+      ? `Earlier lines from the same video, for context only — do not translate or repeat them:\n${earlier.map(c => `- ${c.source}${c.text ? ` => ${c.text}` : ""}`).join("\n")}\n\n`
+      : "";
     return `Translate each of these ${texts.length} YouTube captions to ${name}. Keep one output item for every input item.
 
 Rules:
@@ -1130,9 +1162,11 @@ Rules:
 - Use natural spoken language
 - Do NOT add trailing periods (。 or .); keep ! ? , ，
 - Do NOT merge, split, omit, or reorder any caption
-- Output ONLY ${texts.length} numbered lines in this exact format: [1] translation
+- Use digits for numbers (1990, 3.5, 20%), not words
+- Never stack punctuation such as ?! or !! — one mark at most
+${zhRules}- Output ONLY ${texts.length} numbered lines in this exact format: [1] translation
 
-Captions:
+${contextBlock}Captions:
 ${taggedCaptions}
 
 Translations:`;
@@ -1294,8 +1328,8 @@ Translations:`;
   }
 
   // ----- Claude (Anthropic) -----
-  async function translateBatchClaude(texts, tl, apiKey, signal) {
-    const prompt = buildLLMPrompt(texts, tl);
+  async function translateBatchClaude(texts, tl, apiKey, signal, context, model) {
+    const prompt = buildLLMPrompt(texts, tl, context);
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -1305,7 +1339,7 @@ Translations:`;
         "anthropic-dangerous-direct-browser-access": "true"
       },
       body: JSON.stringify({
-        model: modelFor("claude"),
+        model: model || modelFor("claude"),
         // Sonnet 5.5 and Opus 5.5 think by default and cannot be told not to,
         // and thinking spends from this same budget — 4096 ran out before the
         // translation was written. Haiku 4.5, the default, does not think.
@@ -1321,8 +1355,8 @@ Translations:`;
   }
 
   // ----- OpenAI -----
-  async function translateBatchOpenAI(texts, tl, apiKey, signal) {
-    const prompt = buildLLMPrompt(texts, tl);
+  async function translateBatchOpenAI(texts, tl, apiKey, signal, context, model) {
+    const prompt = buildLLMPrompt(texts, tl, context);
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -1330,7 +1364,7 @@ Translations:`;
         "Authorization": `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: modelFor("openai"),
+        model: model || modelFor("openai"),
         messages: [{ role: "user", content: prompt }],
         // No temperature: the GPT-6 family accepts only the default and 400s on
         // anything else. Effort "none" keeps a subtitle batch from being
@@ -1346,9 +1380,9 @@ Translations:`;
   }
 
   // ----- Google Gemini -----
-  async function translateBatchGemini(texts, tl, apiKey, signal) {
-    const prompt = buildLLMPrompt(texts, tl);
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelFor("gemini"))}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  async function translateBatchGemini(texts, tl, apiKey, signal, context, model) {
+    const prompt = buildLLMPrompt(texts, tl, context);
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model || modelFor("gemini"))}:generateContent?key=${encodeURIComponent(apiKey)}`;
     const res = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -1372,8 +1406,8 @@ Translations:`;
   }
 
   // ----- DeepSeek -----
-  async function translateBatchDeepSeek(texts, tl, apiKey, signal) {
-    const prompt = buildLLMPrompt(texts, tl);
+  async function translateBatchDeepSeek(texts, tl, apiKey, signal, context, model) {
+    const prompt = buildLLMPrompt(texts, tl, context);
     const res = await fetch("https://api.deepseek.com/chat/completions", {
       method: "POST",
       headers: {
@@ -1381,7 +1415,7 @@ Translations:`;
         "Authorization": `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: modelFor("deepseek"),
+        model: model || modelFor("deepseek"),
         messages: [{ role: "user", content: prompt }],
         temperature: 0.1,
         // On by default, at high effort — a chain of thought before every
@@ -1400,29 +1434,30 @@ Translations:`;
   async function translateBatch(texts, tl, options = {}) {
     const provider = options.provider || STATE.settings.translationProvider || "google";
     const signal = options.signal;
-    const key = (STATE.settings.apiKeys || {})[provider];
+    // options.apiKey: live transcription keeps keys of its own.
+    const key = options.apiKey || (STATE.settings.apiKeys || {})[provider];
     try {
       if (provider === "claude") {
         if (!key) throw new Error("Claude API key not set");
-        const out = await translateBatchClaude(texts, tl, key, signal);
+        const out = await translateBatchClaude(texts, tl, key, signal, options.context, options.model);
         options.markProviderUsed?.("claude", provider, "");
         return out;
       }
       if (provider === "openai") {
         if (!key) throw new Error("OpenAI API key not set");
-        const out = await translateBatchOpenAI(texts, tl, key, signal);
+        const out = await translateBatchOpenAI(texts, tl, key, signal, options.context, options.model);
         options.markProviderUsed?.("openai", provider, "");
         return out;
       }
       if (provider === "gemini") {
         if (!key) throw new Error("Gemini API key not set");
-        const out = await translateBatchGemini(texts, tl, key, signal);
+        const out = await translateBatchGemini(texts, tl, key, signal, options.context, options.model);
         options.markProviderUsed?.("gemini", provider, "");
         return out;
       }
       if (provider === "deepseek") {
         if (!key) throw new Error("DeepSeek API key not set");
-        const out = await translateBatchDeepSeek(texts, tl, key, signal);
+        const out = await translateBatchDeepSeek(texts, tl, key, signal, options.context, options.model);
         options.markProviderUsed?.("deepseek", provider, "");
         return out;
       }
@@ -1652,23 +1687,36 @@ Translations:`;
   // surprise on an hour-long video. Track translation, which runs once over a
   // fixed set of lines, is where the paid providers earn their keep.
   const LIVE_DISPLAY_CHARS = 90;    // trim the visible line; CSS clips the rest
+  // How much finished text stays on screen: the newest sentence and, if the
+  // two fit, the one before it — so a line is not gone the moment the next
+  // one lands. Each keeps the translation it was first given.
+  const LIVE_CONTEXT_CHARS = 180;
+
+  function withLiveContext(text) {
+    const prev = live.lastFinal;
+    return prev && prev.length + text.length <= LIVE_CONTEXT_CHARS ? `${prev} ${text}` : text;
+  }
   const LIVE_HIDE_MS = 4000;        // fade out after this much silence
+  // …but a translation that has just appeared stays long enough to be read.
+  // It only arrives once its sentence is over, so a pause straight after it
+  // used to leave three seconds for two rows of text.
+  const LIVE_READ_MS_PER_CHAR = 220;
+  const LIVE_READ_MIN_MS = 6000;
+  const LIVE_READ_MAX_MS = 12000;
   const LIVE_PAUSE_HOLD_MS = 8000;  // …but hold it longer once the video is paused
-  const LIVE_PARTIAL_MS = 900;      // retranslate the sentence in progress this often
 
   const live = {
     active: false,
     status: "stopped",
     detail: "",
-    textBuf: "",         // last finished sentence, with a trailing space
+    textBuf: "",         // what the top line shows once a segment finishes — see liveOnText
+    lastFinal: "",       // the newest finished segment on its own, the next one's context
+    lastTrans: "",       // …and its translation, shown beside the next one unchanged
+    shownTrans: "",      // the translation line as last drawn, to notice a new one
+    holdUntil: 0,        // keep the overlay up at least until then (reading time)
     partial: "",         // sentence in progress
-    transBuf: "",        // its translation
-    transPartial: "",
+    transBuf: "",        // the translation of what textBuf holds
     hideTimer: null,
-    partialTimer: null,
-    partialLastAt: 0,
-    pendingPartial: "",
-    partialToken: 0,
     finalChain: Promise.resolve(),   // keeps finals in order
     gen: 0,              // bumped on stop / seek / video change to void in-flight work
     cache: new Map(),
@@ -1689,18 +1737,63 @@ Translations:`;
 
   function liveRender() {
     if (!live.active || !STATE.settings.enabled) return;
+    // The original is live: finished sentences, then the words being said.
+    // The translation is not: it only ever shows finished sentences, each
+    // translated once and never touched again. A translation of the words in
+    // progress has to be thrown away when the sentence is finalised — the
+    // recogniser's second pass rewrites the sentence — and that rewrite, twice
+    // a second and then once more at the end, is what made the line jump.
     const heard = (live.textBuf + live.partial).trim();
-    const translated = (live.transBuf + live.transPartial).trim();
+    const translated = live.transBuf.trim();
     liveSourceShown = !!heard;
     renderSourceLine(heard ? tailTrim(heard, LIVE_DISPLAY_CHARS) : "");
     renderOverlay(translated ? tailTrim(translated, LIVE_DISPLAY_CHARS) : "");
     if (heard || translated) {
       if (overlayEl) overlayEl.classList.add("yds-live-visible");
+      if (translated && translated !== live.shownTrans) {
+        live.shownTrans = translated;
+        const read = Math.max(LIVE_READ_MIN_MS, Math.min(LIVE_READ_MAX_MS, translated.length * LIVE_READ_MS_PER_CHAR));
+        live.holdUntil = Date.now() + read;
+      }
       clearTimeout(live.hideTimer);
       live.hideTimer = setTimeout(() => {
         if (overlayEl) overlayEl.classList.remove("yds-live-visible");
-      }, LIVE_HIDE_MS);
+      }, Math.max(LIVE_HIDE_MS, (live.holdUntil || 0) - Date.now()));
     }
+  }
+
+  function isUntranslated(out, source) {
+    const norm = (t) => String(t || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+    return !!norm(source) && norm(out) === norm(source);
+  }
+
+  // A finished live sentence, through the viewer's paid provider when they
+  // have turned that on — otherwise the free Google lanes, as everything live
+  // used to be. Kept cheap on purpose: only finished sentences (never the words
+  // in progress), exactly one request each, the same sentence never sent
+  // twice, and only the last two sentences as context, already translated, so
+  // nothing is translated a second time. translateBatch falls back to Google
+  // by itself if the provider fails.
+  async function liveTranslateFinal(text, context) {
+    const s = STATE.settings;
+    // liveUseProvider: the switch this replaced, which borrowed the subtitle
+    // translator. Honoured for anyone who had turned it on.
+    const provider = s.liveProvider && s.liveProvider !== "google" ? s.liveProvider
+      : (s.liveUseProvider ? s.translationProvider : "google");
+    // The live tab's own key; the old switch borrowed the subtitle key.
+    const apiKey = (s.liveApiKeys || {})[provider] || (s.liveUseProvider ? (s.apiKeys || {})[provider] : "");
+    const usePaid = provider && provider !== "google" && apiKey;
+    if (!usePaid) return liveTranslate(text);
+    const model = (s.liveModels || {})[provider] || DEFAULT_MODELS[provider];
+    const key = `${provider}\n${model}\n${s.secondLang}\n${text}`;
+    if (live.cache.has(key)) return live.cache.get(key);
+    const [out] = await translateBatch([text], toGoogleLang(s.secondLang), { provider, context, model, apiKey });
+    const clean = stripUnwantedPunctuation(out || "");
+    if (!isUntranslated(clean, text)) {
+      if (live.cache.size > 500) live.cache.clear();
+      live.cache.set(key, clean);
+    }
+    return clean;
   }
 
   async function liveTranslate(text) {
@@ -1708,19 +1801,25 @@ Translations:`;
     if (live.cache.has(key)) return live.cache.get(key);
     const out = await translateTextGoogle(text, toGoogleLang(STATE.settings.secondLang));
     const clean = stripUnwantedPunctuation(out || "");
+    // A failure is not cached, so the same words get another go next time.
+    if (isUntranslated(clean, text)) return clean;
     if (live.cache.size > 500) live.cache.clear();
     live.cache.set(key, clean);
     return clean;
   }
 
   // Finals go through a promise chain so two of them can't land out of order.
-  function queueFinalTranslation(text) {
+  // A sentence the recogniser cut in two: the first half did not end on a
+  // full stop. Measured on the free Google lanes, a finished sentence comes
+  // out word for word the same with or without the one before it — they
+  // translate sentence by sentence — so context only helps here, where the
+  // second half has lost its subject. Then the two halves are translated as
+  // one, and that replaces the first half's translation: the one moment a
+  // line already on screen is allowed to change.
+  const LIVE_SENTENCE_END = /[.!?…。！？]["'”’)\]]*$/;
+
+  function queueFinalTranslation(text, prev) {
     if (!STATE.settings.secondLang) return;
-    live.transPartial = "";
-    live.pendingPartial = "";
-    live.partialToken++;                 // void any partial translation in flight
-    clearTimeout(live.partialTimer);
-    live.partialTimer = null;
     const gen = live.gen;
     // Where this sentence sits in the video. The recogniser reports no times,
     // so a finished sentence is taken to run from the end of the previous one
@@ -1732,15 +1831,49 @@ Translations:`;
 
     live.finalChain = live.finalChain.then(async () => {
       try {
-        const out = await liveTranslate(text);
+        // Only text that has punctuation at all can say where a sentence
+        // ends. Without the second-pass model the recogniser writes none, and
+        // every sentence would look cut in two.
+        const split = !!prev && /[.,!?;:，。！？；：]/.test(prev) && !LIVE_SENTENCE_END.test(prev.trim());
+        const source = split ? `${prev} ${text}` : text;
+        // The two sentences before this one, for a paid provider's context.
+        // When this merges with the previous half-sentence, that half is part
+        // of what is being translated, so the context starts before it.
+        const context = live.transcript.slice(split ? -3 : -2, split ? -1 : undefined)
+          .map(c => ({ source: c.source, text: c.text }));
+        let out = await liveTranslateFinal(source, context);
         if (gen !== live.gen) return;
-        live.transBuf = out + " ";
-        recordLiveCue(startAt, endAt, text, out);
+        // Handed back unchanged is a failed translation; better a gap than
+        // the original repeated on the translation line.
+        if (isUntranslated(out, source)) out = "";
+        if (split) {
+          live.transBuf = out + " ";
+          // In an exported file the two halves are one cue, as they are one
+          // sentence.
+          const last = live.transcript[live.transcript.length - 1];
+          if (last && last.source === prev) {
+            last.end = endAt;
+            last.source = source;
+            last.text = out;
+          } else {
+            recordLiveCue(startAt, endAt, text, out);
+          }
+        } else {
+          // The previous sentence keeps the translation it already has, in
+          // front of this one. The box is three rows and keeps the newest, so
+          // this sentence is always whole and the previous one shows as much
+          // as fits. (Showing this sentence alone made a short one — "Thank
+          // you, San Francisco." — vanish the moment the next arrived.)
+          live.transBuf = [prev ? live.lastTrans : "", out].filter(Boolean).join(" ") + " ";
+          recordLiveCue(startAt, endAt, text, out);
+        }
+        live.lastTrans = out;
         liveRender();
       } catch (e) {
         log("live translation failed:", e?.message || e);
         if (gen === live.gen) {
           live.transBuf = ydsT("cueTranslateFailed") + " ";
+          live.lastTrans = "";
           recordLiveCue(startAt, endAt, text, "");
           liveRender();
         }
@@ -1758,52 +1891,34 @@ Translations:`;
     if (live.transcript.length > LIVE_TRANSCRIPT_MAX) live.transcript.shift();
   }
 
-  // Throttle, NOT debounce. While someone is speaking the recogniser refreshes
-  // the sentence several times a second; a debounce timer would keep being
-  // pushed back and the translation would not appear until they paused. The
-  // first partial opens a window; later ones only update what gets sent when
-  // that window closes.
-  function queuePartialTranslation(text) {
-    if (!STATE.settings.secondLang) return;
-    live.pendingPartial = text;
-    if (live.partialTimer) return;       // a window is already queued
-    const wait = Math.max(0, LIVE_PARTIAL_MS - (Date.now() - live.partialLastAt));
-    live.partialTimer = setTimeout(async () => {
-      live.partialTimer = null;
-      live.partialLastAt = Date.now();
-      const current = live.pendingPartial;
-      if (!current) return;              // the sentence finalised meanwhile
-      const token = ++live.partialToken;
-      const gen = live.gen;
-      try {
-        const out = await liveTranslate(current);
-        if (token !== live.partialToken || gen !== live.gen) return;
-        live.transPartial = out;
-        liveRender();
-      } catch {}
-    }, wait);
-  }
-
   function liveOnText(text, isFinal) {
     if (!live.active) return;
-    if (isFinal) {
-      // Keep only the newest finished sentence, or the line grows without end.
-      live.textBuf = text + " ";
+    if (isFinal && !String(text || "").trim()) {
+      // An empty final: the recogniser's second pass found no speech in what
+      // the first had been guessing at (applause, music). Nothing to add —
+      // just take the guess off the screen.
       live.partial = "";
-      queueFinalTranslation(text);
+    } else if (isFinal) {
+      // The finished sentence, with the one before it kept alongside while
+      // the two fit. Older ones drop off, or the line grows without end.
+      const keepPrev = withLiveContext(text) !== text;
+      const prev = live.lastFinal;
+      live.textBuf = withLiveContext(text) + " ";
+      live.lastFinal = text;
+      live.partial = "";
+      queueFinalTranslation(text, keepPrev ? prev : "");
     } else {
       live.partial = text;
-      queuePartialTranslation(text);
     }
     liveRender();
   }
 
   function liveClearText() {
-    live.textBuf = live.partial = live.transBuf = live.transPartial = "";
-    live.pendingPartial = "";
-    clearTimeout(live.partialTimer);
-    live.partialTimer = null;
-    live.partialToken++;
+    live.textBuf = live.partial = live.transBuf = "";
+    live.lastFinal = "";
+    live.lastTrans = "";
+    live.shownTrans = "";
+    live.holdUntil = 0;
   }
 
   function liveOnStatus(status, detail) {
@@ -1812,12 +1927,13 @@ Translations:`;
     log(`live: ${status}${detail ? " — " + detail : ""}`);
   }
 
-  async function startLive() {
+  async function startLive(opts) {
     if (!P) return { ok: false, error: "no-platform" };
     if (live.active) return { ok: true };
     const video = P.getVideoEl();
-    if (!video) return { ok: false, error: "no-video" };
-    const res = await window.YDS_LIVE.start(video, { onText: liveOnText, onStatus: liveOnStatus });
+    if (!video && !(opts && opts.tabAudio)) return { ok: false, error: "no-video" };
+    live.server = null;
+    const res = await window.YDS_LIVE.start(video, { onText: liveOnText, onStatus: liveOnStatus, onHello: (h) => { live.server = h; } }, opts);
     if (!res.ok) {
       liveOnStatus("unavailable", res.detail || res.error);
       return res;
@@ -1837,7 +1953,6 @@ Translations:`;
     // unchanged — the overlay currently holds live text, not currentRenderedText.
     currentRenderedText = "";
     clearTimeout(live.hideTimer);
-    clearTimeout(live.partialTimer);
     liveClearText();
     if (overlayEl) overlayEl.classList.remove("yds-live-visible");
     window.YDS_LIVE.stop();
@@ -2712,6 +2827,9 @@ Translations:`;
     if (sourceLine) {
       sourceLine.style.fontSize = `${srcSize}px`;
       sourceLine.style.color = srcColor;
+      // The clip measures its two-line height in its own font size.
+      const srcClip = sourceLine.closest(".yds-clip");
+      if (srcClip) srcClip.style.fontSize = `${srcSize}px`;
     }
     // In live mode the background belongs to the text, not to the box, and the
     // width is fixed rather than measured — both handed to CSS as variables.
@@ -2845,6 +2963,9 @@ Translations:`;
   }
 
   function hideNativeCaption(on) {
+    // Captions the browser draws itself (<track>) have no element to hide;
+    // an adapter that can reach them some other way says so with this hook.
+    if (P && typeof P.hideNativeCues === "function") P.hideNativeCues(!!on);
     if (!on) { if (hiddenNodes.size) showNativeAgain(); return; }
     const els = (P && typeof P.captionEls === "function") ? P.captionEls() : [];
     const seen = new Set();
@@ -3314,43 +3435,50 @@ Translations:`;
         // Landing page → video page is a URL change with no page load, so this
         // is where a session that started with nothing to do comes alive.
         if (tryAttach) tryAttach();
-        const newVid = P ? P.getVideoId() : null;
-        if (newVid !== STATE.videoId) {
-          abortInflightTranslation("video changed");
-          closePaidApiPrompt();
-          closeRateCard();
-          clearPaidAskRetry();   // a late track list for the previous video
-          setTranslationStatus({
-            mode: "idle",
-            provider: "",
-            requestedProvider: "",
-            cueCount: 0,
-            error: ""
-          });
-          STATE.videoId = newVid;
-          preCuesNative = [];
-          preCuesTranslated = [];
-          sourceCuesCache = null;
-          sentenceGroups = null;
-          lastInlineLines = null;
-          availableTracks = [];
-          trackRequested = false;
-          trackRetries = 0;
-          clearTimeout(trackRetryTimer);
-          sourceRequestAttempts = 0;
-          sourceLang = "";
-          sourceIsAsr = false;
-          betterSourceRequested = false;
-          seenTrackKeys.clear();
-          translationCache.clear();
-          lastNativeText = "";
-          currentRenderedText = "";
-          if (P) P.reset();
-          stopLive();
-          renderOverlay("");
-        }
+        checkVideoChanged();
       }
     }).observe(document, { subtree: true, childList: true });
+  }
+
+  // Everything held for one video, dropped when the page moves to another.
+  // Usually that is a URL change (above). An embedded player can swap videos
+  // with no URL change at all — the host page tells it to through the iframe
+  // API — so adapters that can see that happen call this through ctx.
+  function checkVideoChanged() {
+    const newVid = P ? P.getVideoId() : null;
+    if (newVid === STATE.videoId) return;
+    abortInflightTranslation("video changed");
+    closePaidApiPrompt();
+    closeRateCard();
+    clearPaidAskRetry();   // a late track list for the previous video
+    setTranslationStatus({
+      mode: "idle",
+      provider: "",
+      requestedProvider: "",
+      cueCount: 0,
+      error: ""
+    });
+    STATE.videoId = newVid;
+    preCuesNative = [];
+    preCuesTranslated = [];
+    sourceCuesCache = null;
+    sentenceGroups = null;
+    lastInlineLines = null;
+    availableTracks = [];
+    trackRequested = false;
+    trackRetries = 0;
+    clearTimeout(trackRetryTimer);
+    sourceRequestAttempts = 0;
+    sourceLang = "";
+    sourceIsAsr = false;
+    betterSourceRequested = false;
+    seenTrackKeys.clear();
+    translationCache.clear();
+    lastNativeText = "";
+    currentRenderedText = "";
+    if (P) P.reset();
+    stopLive();
+    renderOverlay("");
   }
 
   // ---------- messaging with popup ----------
@@ -3461,12 +3589,223 @@ Translations:`;
     return blocks.join("\n\n") + (blocks.length ? "\n" : "");
   }
 
+  // A transcript to read rather than a subtitle file to play: the same cue
+  // pairs, joined into paragraphs, with a timestamp and — where the adapter
+  // knows it — who was speaking. Markdown, so it opens cleanly in a notes app.
+  //
+  // A paragraph ends where the speaker changes, at a real pause, or once it
+  // has run long enough that a timestamp is worth having again.
+  function buildNotes() {
+    const cues = exportableCues().filter(c => (c.source || c.text || "").trim());
+    if (!cues.length) return "";
+    const speakerAt = (t) => {
+      try { return (P && typeof P.speakerAt === "function") ? String(P.speakerAt(t) || "") : ""; }
+      catch { return ""; }
+    };
+    const PAUSE_S = 2.5;
+    const MAX_PARA_S = 75;
+    const paras = [];
+    let cur = null;
+    for (const c of cues) {
+      const speaker = speakerAt(c.start + 0.05);
+      const breakHere = !cur
+        || speaker !== cur.speaker
+        || c.start - cur.end > PAUSE_S
+        || c.end - cur.start > MAX_PARA_S;
+      if (breakHere) {
+        cur = { start: c.start, end: c.end, speaker, pairs: [] };
+        paras.push(cur);
+      }
+      cur.end = Math.max(cur.end, c.end);
+      const s = String(c.source || "").replace(/\s+/g, " ").trim();
+      // A two-row cue is usually two short sentences; in Chinese a bare space
+      // between them reads as one run-on, so the row break becomes a stop.
+      const t = String(c.text || "")
+        .split(/\n+/).map(x => x.trim()).filter(Boolean)
+        .join(isCjkLang(STATE.settings.secondLang) ? "。" : " ")
+        .replace(/([。！？…，、；：])。/g, "$1")
+        .replace(/[^\S\n]+/g, " ").trim();
+      // Sentence groups can hand the same pair to neighbouring cues.
+      const last = cur.pairs[cur.pairs.length - 1];
+      if ((s || t) && !(last && last[0] === s && last[1] === t)) cur.pairs.push([s, t]);
+    }
+
+    const cjkTarget = isCjkLang(STATE.settings.secondLang);
+    const stamp = (sec) => srtTime(sec).slice(0, 8);
+    // The translator's output has its closing full stop removed for the
+    // subtitle; a line of prose reads better with it back.
+    // Only where the original sentence ended there — a caption cue is often
+    // half a sentence, and a full stop after every half reads as nonsense.
+    const SRC_ENDS = /[.!?…。！？]["'”’)\]]*$/;
+    const closed = (t, src) =>
+      (cjkTarget && SRC_ENDS.test(src) && !/[。！？…，、；：”’」』）.!?]$/.test(t) ? t + "。" : t);
+    let title = "";
+    try { title = (P && typeof P.videoTitle === "function") ? String(P.videoTitle() || "") : ""; } catch {}
+    const lines = [];
+    lines.push(`# ${title || document.title || "Transcript"}`, "");
+    lines.push(location.href.split("#")[0], "");
+    lines.push(`${new Date().toISOString().slice(0, 10)} · ${shortLangTag(sourceLang) || "?"} → ${shortLangTag(STATE.settings.secondLang) || "?"}`, "");
+    let lastSpeaker = null;
+    for (const p of paras) {
+      const who = p.speaker && p.speaker !== lastSpeaker ? ` ${p.speaker}` : "";
+      lastSpeaker = p.speaker;
+      lines.push("---", "", `**[${stamp(p.start)}]${who}**`, "");
+      // One sentence, then its translation directly under it as a quote —
+      // sentence by sentence, so the two languages can be read against each
+      // other. Joined into two paragraphs they were a block of English over
+      // a block of Chinese with no way to tell which line went with which.
+      for (const [src, tr] of p.pairs) {
+        if (src) lines.push(src);
+        // A line the translator handed back unchanged is not a translation.
+        if (tr && tr !== src) lines.push(`> ${closed(tr, src)}`);
+        lines.push("");
+      }
+    }
+    return lines.join("\n");
+  }
+
+  // ---------- a site's own transcript panel, made bilingual ----------
+  //
+  // Zoom shows the whole transcript beside the recording. Each paragraph gets
+  // its translation underneath, in a line of our own. Translated with the free
+  // Google lanes on purpose: the panel is hundreds of paragraphs, and spending
+  // a paid key on it would bypass the consent the paid-API prompt exists for.
+  // Only paragraphs the panel has actually rendered are translated, in small
+  // batches, and each text once per language.
+  const panelCache = new Map();     // `${lang}\n${text}` → translation
+  let panelBusy = false;
+
+  function removePanelTranslations() {
+    for (const el of document.querySelectorAll(".yds-panel-tr, .yds-panel-hint")) el.remove();
+  }
+
+  // Inside the paragraph, as its last child — not beside it. Zoom lays each
+  // paragraph out in a row with other things, and a sibling there became a
+  // second column: the translation took the width and the original was
+  // squeezed into a strip one letter wide. A block at the end of the
+  // paragraph's own box sits under the text whatever the row is doing.
+  function paintPanelTranslation(el, text) {
+    let tr = null;
+    for (const child of el.children) {
+      if (child.classList.contains("yds-panel-tr")) { tr = child; break; }
+    }
+    if (tr) {
+      if (tr.textContent !== text) tr.textContent = text;
+      return;
+    }
+    tr = document.createElement("span");
+    tr.className = "yds-panel-tr";
+    tr.textContent = text;
+    el.appendChild(tr);
+  }
+
+  // The first time translations appear in a transcript panel, say whose they
+  // are and where the switch is — otherwise it looks like the site changed,
+  // and someone who would rather not have them has no idea what to turn off.
+  // Shown once ever, as a banner over the video. (It used to sit inside the
+  // panel, but Zoom re-renders its paragraphs and took it straight back out —
+  // after it had already been marked as seen.)
+  // Its own element, not the status toast: that one is rewritten by every
+  // translation status ("translating…", "done"), and on Zoom those arrive the
+  // moment the page opens — the hint was replaced before it could be read,
+  // after already being marked as seen. Shown once the video is actually
+  // playing, lower than the toast, clear of Zoom's own popovers at the top.
+  let panelHintChecked = false;
+  let panelHintEl = null;
+  let panelHintWhy = "";
+  function panelHintSkip(why) {
+    if (why !== panelHintWhy) { panelHintWhy = why; log("panel hint: " + why); }
+  }
+  function showPanelHintOnce(items) {
+    if (panelHintChecked) return;
+    if (!items.length) return panelHintSkip("no panel paragraphs found yet");
+    const video = P && P.getVideoEl && P.getVideoEl();
+    if (!video || video.paused) return panelHintSkip("waiting for the video to play");
+    const host = getVideoContainer();
+    if (!host) return panelHintSkip("no player container");
+    panelHintChecked = true;
+    try {
+      chrome.storage.local.get(["ydsPanelHintShown3"], (r) => {
+        if (chrome.runtime.lastError || (r && r.ydsPanelHintShown3)) {
+          log("panel hint: already shown once before");
+          return;
+        }
+        log("panel hint: showing");
+        if (panelHintEl) panelHintEl.remove();
+        panelHintEl = document.createElement("div");
+        panelHintEl.className = "yds-toast yds-toast-ok yds-hint";
+        panelHintEl.textContent = ydsT("panelHint");
+        host.appendChild(panelHintEl);
+        requestAnimationFrame(() => panelHintEl && panelHintEl.classList.add("yds-toast-on"));
+        setTimeout(() => {
+          if (!panelHintEl) return;
+          panelHintEl.classList.remove("yds-toast-on");
+          const el = panelHintEl;
+          panelHintEl = null;
+          setTimeout(() => el.remove(), 400);
+        }, 12000);
+        chrome.storage.local.set({ ydsPanelHintShown3: true });
+      });
+    } catch {}
+  }
+
+  // "name: what they said" — the name is Zoom's speaker label, not speech, and
+  // translating it came out as a mangled name in front of every first line.
+  const PANEL_SPEAKER = /^([^\s:,.!?…]+(?: [^\s:,.!?…]+){0,2}): (?=\S)/;
+
+  async function syncTranscriptPanel() {
+    if (!P || typeof P.transcriptPanelItems !== "function" || tornDown) return;
+    if (!STATE.settings.enabled || !STATE.settings.transcriptPanelBilingual || !STATE.settings.secondLang) {
+      removePanelTranslations();
+      return;
+    }
+    if (panelBusy) return;
+    let items;
+    try { items = P.transcriptPanelItems() || []; } catch { return; }
+    if (!items.length) return;
+    const lang = STATE.settings.secondLang;
+    const tl = toGoogleLang(lang);
+    const missing = [];
+    for (const { el, text } of items) {
+      const hit = panelCache.get(`${lang}\n${text}`);
+      if (hit != null) paintPanelTranslation(el, hit);
+      else if (!missing.includes(text)) missing.push(text);
+    }
+    showPanelHintOnce(items);
+    if (!missing.length) return;
+    panelBusy = true;
+    try {
+      // Twenty paragraphs a request keeps each call well inside the URL limit
+      // of the free lanes, and the panel fills in a few seconds.
+      for (let i = 0; i < missing.length; i += 20) {
+        const batch = missing.slice(i, i + 20);
+        const labels = batch.map(t => { const m = PANEL_SPEAKER.exec(t); return m ? m[1] : ""; });
+        const spoken = batch.map((t, j) => labels[j] ? t.slice(labels[j].length + 1).trim() : t);
+        const raw = await translateBatchGoogle(spoken, tl);
+        const out = raw.map((t, j) => labels[j] ? `${labels[j]}: ${t}` : t);
+        if (STATE.settings.secondLang !== lang) return;
+        // Kept as the translator wrote it. These are paragraphs of several
+        // sentences; the subtitle's punctuation trimming would run them
+        // together.
+        batch.forEach((t, j) => panelCache.set(`${lang}\n${t}`, String(out[j] || "").trim()));
+        for (const { el, text } of items) {
+          const hit = panelCache.get(`${lang}\n${text}`);
+          if (hit != null && el.isConnected) paintPanelTranslation(el, hit);
+        }
+      }
+    } catch (e) {
+      log("transcript panel translation failed:", e?.message || e);
+    } finally {
+      panelBusy = false;
+    }
+  }
+
   // Safe on every filesystem, and still recognisable.
   // "<title>-<channel>-<video id>-<languages>.srt", with any part the page
   // would not tell us simply left out. The id stays in because a title and a
   // channel are not unique — two lessons in a series share both — and it is
   // what lets a saved file be matched back to the video it came from.
-  function exportFilename(kind) {
+  function exportFilename(kind, ext = "srt") {
     const ask = (name) => {
       try { return (P && typeof P[name] === "function") ? String(P[name]() || "") : ""; }
       catch { return ""; }
@@ -3480,7 +3819,7 @@ Translations:`;
     // Nothing identifying came back — keep the old shape rather than saving a
     // file called "CN+EN.srt".
     if (parts.length < 2) parts.unshift(STATE.platform || "happysubs");
-    return `${parts.join("-")}.srt`;
+    return `${parts.join("-")}.${ext}`;
   }
 
   // Which languages are in the file: "CN+EN" for both, "CN" for the
@@ -3541,7 +3880,15 @@ Translations:`;
     }
     if (msg?.type === "YDS_GET_SRT") {
       const kind = msg.kind || "bilingual";
-      const srt = buildSrt(kind);
+      const notes = kind === "notes";
+      // Translation fills in batch by batch. A file saved part-way through
+      // has its second half in one language only, and nothing in it says so
+      // — so anything that includes the translation waits until it is done.
+      if (kind !== "original" && !live.transcript.length && translationStatus.mode === "translating") {
+        sendResponse({ ok: false, busy: true });
+        return true;
+      }
+      const srt = notes ? buildNotes() : buildSrt(kind);
       const count = exportableCues().length;
       const from = live.transcript.length ? "live"
                  : preCuesTranslated.length ? "translated" : "native";
@@ -3550,17 +3897,22 @@ Translations:`;
       // document is destroyed the moment it loses focus — which is exactly what
       // clicking a download link does. The URL died with it and nothing was
       // saved. This page is not going anywhere.
-      const filename = exportFilename(kind);
+      const filename = notes ? exportFilename("bilingual", "md") : exportFilename(kind);
       if (srt) saveFile(filename, srt);
       // The name goes back as well: the popup never sees the file, and this is
       // the only way a test can check what was actually saved.
-      sendResponse({ ok: !!srt, cueCount: count, from, filename });
+      // Lines the translator handed back unchanged, so the popup can say so
+      // rather than let a file with gaps pass as complete.
+      const untranslated = kind === "original" ? 0
+        : exportableCues().filter(c => c.source && String(c.text || "").trim() === String(c.source).trim()).length;
+      sendResponse({ ok: !!srt, cueCount: count, from, filename, untranslated });
       return true;
     }
     if (msg?.type === "YDS_GET_INFO") {
       sendResponse({
         platform: STATE.platform,
         videoId: P ? P.getVideoId() : null,
+        videoTitle: P && P.videoTitle ? P.videoTitle() : "",
         tracks: availableTracks,
         translations: [],
         settings: STATE.settings,
@@ -3577,7 +3929,9 @@ Translations:`;
         translationStatus,
         preCuesLoaded: preCuesNative.length + preCuesTranslated.length,
         usingNativeTrack: preCuesNative.length > 0,
-        live: { active: live.active, status: live.status, detail: live.detail }
+        // server: what the recogniser said about itself on connect. Null
+        // while listening means one from before 2.2.0, which says nothing.
+        live: { active: live.active, status: live.status, detail: live.detail, server: live.server || null }
       });
       return true;
     }
@@ -3590,7 +3944,7 @@ Translations:`;
       return true;   // async
     }
     if (msg?.type === "YDS_LIVE_START") {
-      startLive().then(sendResponse);
+      startLive({ tabAudio: !!msg.tabAudio }).then(sendResponse);
       return true;   // async
     }
     if (msg?.type === "YDS_LIVE_STOP") {
@@ -3610,7 +3964,12 @@ Translations:`;
       langMatches,
       coalesce: coalesceIdenticalCues,
       onTrackList: handleTrackList,
-      ingest: ingestCues
+      ingest: ingestCues,
+      // The adapter noticed the video change without the URL changing.
+      videoChanged: checkVideoChanged,
+      // The adapter learned the id of the video already playing (an embed
+      // whose URL does not carry it). Not a change — nothing to drop.
+      adoptVideoId: () => { if (P) STATE.videoId = P.getVideoId(); }
     };
 
     // Attaching is deliberately retryable. These sites are single-page apps: the
@@ -3632,6 +3991,9 @@ Translations:`;
       watchPlayback();
       watchForRatingMoment();
       requestAnimationFrame(renderTick);
+      // A site transcript panel renders lazily and re-renders on search, so
+      // it is re-checked on a slow beat rather than once.
+      if (typeof P.transcriptPanelItems === "function") setInterval(syncTranscriptPanel, 1500);
       log("attached", { platform: platformId, videoId: STATE.videoId });
       return true;
     }
@@ -3646,6 +4008,12 @@ Translations:`;
     drainPending();
 
     watchUrlChanges(tryAttach);
+    // A site the viewer set to always-on loads us with the page, often
+    // before its player exists, and many players appear without the URL
+    // ever changing. Keep looking until there is a video to attach to.
+    if (!P && platformId === "generic") {
+      const wait = setInterval(() => { if (tryAttach()) clearInterval(wait); }, 2000);
+    }
     log("booted", { platform: platformId, attached: !!P, secondLang: STATE.settings.secondLang });
   })();
 })();

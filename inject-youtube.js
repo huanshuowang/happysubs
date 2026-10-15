@@ -67,9 +67,22 @@
   } catch {}
 
   // ---- track list from ytInitialPlayerResponse ----
-  function publishTracks() {
+  //
+  // An embedded player (/embed/ on youtube.com or youtube-nocookie.com, inside
+  // someone else's page) has no ytInitialPlayerResponse, and often no video id
+  // in its URL either — the host page picks the video through the iframe API.
+  // The player object holds the same response once it has loaded the video,
+  // which in an embed is usually not until the first play.
+  const isEmbed = /^\/embed\//.test(location.pathname);
+  let lastSignature = "";
+
+  function publishTracks(onlyIfChanged) {
     try {
-      const r = window.ytInitialPlayerResponse;
+      const player = document.querySelector("#movie_player");
+      let r = window.ytInitialPlayerResponse;
+      if (isEmbed && player && typeof player.getPlayerResponse === "function") {
+        try { r = player.getPlayerResponse() || r; } catch {}
+      }
       const rawTracks = (r && r.captions
         && r.captions.playerCaptionsTracklistRenderer
         && r.captions.playerCaptionsTracklistRenderer.captionTracks) || [];
@@ -78,7 +91,13 @@
         kind: t.kind || "",
         name: (t.name && (t.name.simpleText || (t.name.runs || []).map(x => x.text).join(""))) || t.languageCode || ""
       }));
-      const videoId = (r && r.videoDetails && r.videoDetails.videoId) || null;
+      let videoId = (r && r.videoDetails && r.videoDetails.videoId) || null;
+      if (!videoId && isEmbed && player && typeof player.getVideoData === "function") {
+        try { videoId = player.getVideoData().video_id || null; } catch {}
+      }
+      const signature = `${videoId}|${tracks.map(t => `${t.languageCode}:${t.kind}`).join(",")}`;
+      if (onlyIfChanged && signature === lastSignature) return;
+      lastSignature = signature;
       window.dispatchEvent(new CustomEvent("YDS_TRACK_LIST", { detail: { videoId, tracks } }));
     } catch {}
   }
@@ -86,6 +105,27 @@
   publishTracks();
   setTimeout(publishTracks, 500);
   setTimeout(publishTracks, 1500);
+  // No navigation to hook in an embed: the video arrives on first play, or
+  // changes when the host page loads another through the iframe API.
+  if (isEmbed) setInterval(() => publishTracks(true), 2000);
+
+  // ---- caption on/off, from the player rather than its button ----
+  // The content script reads CC state off .ytp-subtitles-button, but the newer
+  // embed UI moves CC to the top bar with different markup, and "can't tell"
+  // keeps the overlay hidden. The player always knows: a current track with a
+  // language means captions are showing. Left on <html> for the content script,
+  // which shares the DOM but not our JS world.
+  function publishCcState() {
+    try {
+      const player = document.querySelector("#movie_player");
+      if (!player || typeof player.getOption !== "function") return;
+      let track = null;
+      try { track = player.getOption("captions", "track"); } catch {}
+      const on = track && track.languageCode ? "1" : "0";
+      if (document.documentElement.dataset.ydsCc !== on) document.documentElement.dataset.ydsCc = on;
+    } catch {}
+  }
+  setInterval(publishCcState, 500);
 
   let lastUrl = location.href;
   new MutationObserver(() => {
@@ -103,14 +143,19 @@
   // then on every auto-captioned video arrived pre-translated by YouTube with
   // our own translation drawn over the top.
   //
-  // Clear it, once per video: the player keeps the same original track, minus
-  // the translation. Choosing it again from the player's own menu sticks,
-  // because this only runs when the track list is (re)published.
+  // YouTube also switches it on by itself: with the account language set to
+  // English, a Thai video opens as "Thai (auto-generated) >> English". Every
+  // caption request then carries tlang=, which we never use as a source — so
+  // the viewer got YouTube's English and no bilingual subtitle at all until
+  // they turned the translation off by hand.
+  //
+  // So any auto-translation is cleared, whatever language it is into: what
+  // this extension draws is always the original plus the viewer's language.
+  // Once per video — the player keeps the same original track, minus the
+  // translation, and choosing it again from the player's own menu sticks.
   const clearedFor = new Set();
 
   window.addEventListener("YDS_CLEAR_AUTO_TRANSLATE", (e) => {
-    const want = String((e.detail && e.detail.languageCode) || "").toLowerCase();
-    if (!want) return;
     const player = document.querySelector("#movie_player");
     if (!player || typeof player.getOption !== "function") return;
 
@@ -123,9 +168,7 @@
     if (!track) return;
     const translating = String(track.translationLanguage
       && (track.translationLanguage.languageCode || track.translationLanguage) || "").toLowerCase();
-    // Only the one we would be duplicating. A viewer translating into some
-    // other language has made a choice that is nothing to do with us.
-    if (!translating || translating.split("-")[0] !== want.split("-")[0]) return;
+    if (!translating) return;
 
     clearedFor.add(id);
     try {

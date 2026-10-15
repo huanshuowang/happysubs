@@ -1,8 +1,8 @@
 {
   "appName": {
-    "message": "HappySubs — Sous-titres bilingues pour YouTube™, Vimeo et Bilibili"
+    "message": "HappySubs — Sous-titres bilingues : YouTube™, Vimeo, Zoom, Bilibili"
   },
   "appDesc": {
-    "message": "Sous-titres en deux langues sur YouTube, Vimeo et Bilibili : traduisez-les, lisez les deux ensemble et exportez-les en .srt."
+    "message": "Sous-titres en deux langues sur YouTube, Vimeo, Bilibili et Zoom : traduisez, lisez les deux ensemble, exportez en .srt."
   }
 }

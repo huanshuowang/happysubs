@@ -14,6 +14,11 @@ set -e
 RAW="https://raw.githubusercontent.com/huanshuowang/happysubs/main"
 MODEL_TARBALL="sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20"
 MODEL_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/${MODEL_TARBALL}.tar.bz2"
+# The second-pass model: re-recognises each finished sentence for accuracy,
+# punctuation, and Japanese / Korean / Cantonese. Optional — server.py runs
+# without it — so a failed download here does not fail the install.
+REFINE_TARBALL="sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17"
+REFINE_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/${REFINE_TARBALL}.tar.bz2"
 STANDALONE_DIR="happysubs-server"
 
 # Running from a clone puts server/ next to this script. Piped from curl there
@@ -57,6 +62,20 @@ else
         model/decoder-epoch-99-avg-1.onnx \
         model/joiner-epoch-99-avg-1.onnx
   rm -rf model/test_wavs
+fi
+
+if [ -f model-sensevoice/model.int8.onnx ]; then
+  echo "==> 二次识别模型已存在,跳过下载"
+else
+  echo "==> 下载二次识别模型 SenseVoice(约 155MB):定稿更准、带标点,支持日语/韩语/粤语"
+  if curl -L --retry 3 -o refine.tar.bz2 "$REFINE_URL" && tar xjf refine.tar.bz2; then
+    mkdir -p model-sensevoice
+    mv "$REFINE_TARBALL/model.int8.onnx" "$REFINE_TARBALL/tokens.txt" model-sensevoice/
+    rm -rf "$REFINE_TARBALL" refine.tar.bz2
+  else
+    rm -rf "$REFINE_TARBALL" refine.tar.bz2
+    echo "    没下载成功。不影响使用:识别照常工作,只是没有二次识别。之后重跑一次本命令可补上。"
+  fi
 fi
 
 chmod +x start.sh 2>/dev/null || true

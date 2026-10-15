@@ -223,6 +223,25 @@
     input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; }
     input[type="color"] { padding: 2px; height: 26px; }
     .switch { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
+    .liveStartHint { font-size: 12px; color: var(--ink-soft); margin: 6px 0 10px; line-height: 1.55; }
+    .liveCmd { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+    .liveCmd code {
+      flex: 1 1 auto; min-width: 0; overflow-x: auto; white-space: nowrap;
+      font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      padding: 6px 8px; border-radius: 8px;
+      background: rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.08);
+    }
+    @media (prefers-color-scheme: dark) {
+      .liveCmd code { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.12); }
+    }
+    /* A recogniser update to install: the same tint as the site-access card. */
+    .liveNote {
+      margin-top: 8px; padding: 8px 10px; border-radius: 10px;
+      background: rgba(255,0,51,0.07); border: 1px solid rgba(255,0,51,0.25);
+      color: inherit; font-weight: 600;
+    }
+    /* A switch whose label runs to two lines: let it wrap inside the panel
+       (rows otherwise keep labels on one line), checkbox aligned to the top. */
 
     .apiKeyWrap, .fieldWrap { display: flex; align-items: center; gap: 6px; flex: 1 1 auto; min-width: 0; }
     .apiKeyWrap input, .fieldWrap input { width: 100%; }
@@ -381,6 +400,13 @@
 
   <div id="mainView">
 
+  <!-- First thing in the panel when it applies: a site that would work by
+       itself with one more permission (Zoom recordings, embedded YouTube). -->
+  <div class="row" id="siteAccessRow" hidden style="background: rgba(255,0,51,0.09); border: 1px solid rgba(255,0,51,0.25); border-radius: 12px; padding: 10px 12px; margin-top: 0;">
+    <span id="siteAccessText" style="flex:1; font-size: 13px; line-height: 1.4; font-weight: 600;"></span>
+    <button type="button" id="siteAccessBtn" class="keyEdit"></button>
+  </div>
+
   <div class="rateBanner" id="rateBanner" hidden>
     <span class="rateText" data-i18n="rateBanner">用得顺手的话，给个评分吧</span>
     <a class="rateGo" id="rateGo" href="https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf/reviews" target="_blank" rel="noopener" data-i18n="rateYes">去评分</a>
@@ -400,6 +426,39 @@
   <div class="panel" id="panelLive" hidden>
     <button type="button" id="liveToggle" data-i18n="liveStart">开启实时听译</button>
     <div class="liveStatus" id="liveStatus"></div>
+    <!-- How to start the recogniser, shown until it is connected: people
+         forget, and the terminal is the one step outside the browser. -->
+    <div class="liveStartHint" id="liveStartHint" hidden>
+      <div id="liveStartText"></div>
+      <div class="liveCmd" id="liveCmdRow">
+        <code id="liveCmd">~/happysubs-server/start.sh</code>
+        <button type="button" id="liveCmdCopy" class="keyEdit"></button>
+      </div>
+    </div>
+    <!-- Live transcription's own translator, apart from the Translate tab's:
+         keys are shared per provider, the choice is not. -->
+    <div class="row" style="margin-top: 12px;">
+      <label for="liveProvider" data-i18n="translationSource">翻译源</label>
+      <select id="liveProvider">
+        <option value="google" data-i18n="providerGoogle">Google Translate（免费）</option>
+        <option value="claude" data-i18n="providerClaude">Claude</option>
+        <option value="openai" data-i18n="providerOpenai">OpenAI</option>
+        <option value="gemini" data-i18n="providerGemini">Google Gemini</option>
+        <option value="deepseek" data-i18n="providerDeepseek">DeepSeek</option>
+      </select>
+    </div>
+    <div class="row" id="liveModelRow" hidden>
+      <label for="liveModel" data-i18n="model">模型</label>
+      <select id="liveModel"></select>
+    </div>
+    <div class="row" id="liveKeyRow" hidden>
+      <label for="liveApiKey">API Key</label>
+      <div class="apiKeyWrap">
+        <input type="password" id="liveApiKey" autocomplete="off" spellcheck="false" />
+        <span id="liveApiKeyState" class="keyState"></span>
+        <button type="button" id="editLiveApiKey" class="keyEdit">编辑</button>
+      </div>
+    </div>
   </div>
 
   <div class="panel" id="panelTranslate">
@@ -477,12 +536,17 @@
   </div>
   <div class="muted" id="takeoverNote" style="margin: -4px 0 9px;" data-i18n="takeoverNote">打开后，所有视频字幕均由插件接管原文和译文，可在设置中自定义样式。</div>
 
+  <div class="row" id="transcriptPanelRow" hidden>
+    <label class="switch"><input type="checkbox" id="transcriptPanelBilingual" /> <span data-i18n="transcriptPanelBilingual">Zoom：转录稿栏显示双语</span></label>
+  </div>
+
   <div class="row srtRow">
     <label for="srtKind" data-i18n="exportSrt">导出字幕</label>
     <select id="srtKind">
       <option value="bilingual" data-i18n="srtBilingual">双语</option>
       <option value="original" data-i18n="srtOriginal">仅原文</option>
       <option value="translation" data-i18n="srtTranslation">仅译文</option>
+      <option value="notes" data-i18n="srtNotes">双语文稿 (.md)</option>
     </select>
     <button type="button" id="downloadSrt" class="keyEdit" data-i18n="srtDownload">下载</button>
   </div>

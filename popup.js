@@ -2,6 +2,10 @@
 // language and adjust overlay styling. Persists to chrome.storage.sync.
 
 const DEFAULTS = {
+  liveProvider: "google",
+  liveModels: {},
+  liveApiKeys: {},
+  transcriptPanelBilingual: true,
   enabled: true,
   secondLang: ydsDefaultSecondLang(),
   bottomOffset: 5,
@@ -177,6 +181,9 @@ function transparencyToBg(t) {
   return `rgba(0,0,0,${opacity.toFixed(2)})`;
 }
 
+// Sites the manifest injects into. Zoom is not one of them: it is an optional
+// permission, so until it is granted the popup injects by hand like any other
+// page (see injectGeneric and the site-access row).
 const SUPPORTED_URL = /^https?:\/\/(www\.youtube\.com|(player\.)?vimeo\.com|www\.bilibili\.com)\//;
 
 // Info from the last probe in getActiveSupportedTab, so we don't message the
@@ -187,17 +194,125 @@ async function getActiveSupportedTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab) return null;
   activeTabUrl = tab.url || "";
+  currentTabId = tab.id;
   if (tab.url && SUPPORTED_URL.test(tab.url)) return tab;
   // A YouTube/Vimeo player embedded in someone else's page — a course site, a
   // blog. The tab's own URL is not ours, but the content script is alive in the
   // player's frame and answers, so ask before giving up.
   probedInfo = await askContent(tab.id);
-  return probedInfo && probedInfo.videoId ? tab : null;
+  if (probedInfo && probedInfo.videoId) return tab;
+  // Any other page with a <video> — a course site, a local .mp4 opened as
+  // file:// — gets the generic adapter, for live transcription.
+  if (await injectGeneric(tab)) {
+    probedInfo = await askContent(tab.id);
+    if (probedInfo && probedInfo.videoId) return tab;
+  }
+  return null;
+}
+
+// Sites that work better with a standing permission than with a click each
+// time. Asked for once, from the popup, on the page where it matters:
+//   zoom  — a Zoom recording we just injected into by hand; granting makes
+//           the next recording start by itself.
+//   embed — a page with a youtube-nocookie.com player in a frame, which
+//           activeTab cannot reach at all (it covers the top page only).
+//   site  — any other site we just injected into by hand (Coursera, a
+//           course portal): the same offer, for that one site only.
+const SITE_ACCESS = {
+  zoom: { origins: ["https://*.zoom.us/*"], text: "siteAccessZoom" },
+  embed: { origins: ["*://www.youtube-nocookie.com/*"], text: "siteAccessEmbed" }
+};
+// { kind, origins, host } for the offer to show, or null.
+let siteAccessNeeded = null;
+let currentTabId = null;
+
+async function noteSiteAccess(kind, url) {
+  let offer;
+  if (kind === "site") {
+    let u;
+    try { u = new URL(url); } catch { return; }
+    if (!/^https?:$/.test(u.protocol)) return;
+    offer = { kind, origins: [`${u.origin}/*`], host: u.hostname.replace(/^www\./, "") };
+  } else {
+    offer = { kind, origins: SITE_ACCESS[kind].origins, host: "" };
+  }
+  const granted = await chrome.permissions.contains({ origins: offer.origins });
+  // An embed the top page cannot reach matters more than the page itself.
+  if (!granted && !(siteAccessNeeded && siteAccessNeeded.kind === "embed")) siteAccessNeeded = offer;
+}
+
+function renderSiteAccess() {
+  const row = $("siteAccessRow");
+  if (!siteAccessNeeded) { row.hidden = true; return; }
+  row.hidden = false;
+  const { kind, host } = siteAccessNeeded;
+  $("siteAccessText").textContent = kind === "site"
+    ? ydsT("siteAccessSite", { host })
+    : ydsT(SITE_ACCESS[kind].text);
+  $("siteAccessBtn").textContent = ydsT("siteAccessAllow");
+}
+
+async function requestSiteAccess() {
+  const offer = siteAccessNeeded;
+  if (!offer) return;
+  let granted = false;
+  try { granted = await chrome.permissions.request({ origins: offer.origins }); } catch {}
+  if (!granted) return;
+  siteAccessNeeded = null;
+  renderSiteAccess();
+  // The service worker registers the script and, for an embed, reloads the
+  // tab; nothing more to do here even if this popup survived the dialog.
+  $("status").textContent =
+    offer.kind === "embed" ? ydsT("siteAccessReloading")
+    : offer.kind === "site" ? ydsT("siteAccessDoneSite", { host: offer.host })
+    : ydsT("siteAccessDone");
+}
+
+// Set when the tab is a local file Chrome won't let us into. Turning on "Allow
+// access to file URLs" is the viewer's call, so all we can do is say where.
+let fileAccessBlocked = false;
+
+// activeTab grants this tab for as long as the popup that opened it, which is
+// all injection needs — no host permission, no install-time warning. Probe
+// first so a page without a video never gets our scripts at all.
+async function injectGeneric(tab) {
+  const url = tab.url || "";
+  if (/^file:/.test(url) && !(await chrome.extension.isAllowedFileSchemeAccess())) {
+    fileAccessBlocked = true;
+    return false;
+  }
+  if (!/^(https?|file):/.test(url)) return false;
+  try {
+    const [probe] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => {
+        const has = !!document.querySelector("video");
+        if (has) window.YDS_FORCE_GENERIC = true;
+        return {
+          hasVideo: has,
+          hasNocookieEmbed: !!document.querySelector('iframe[src*="youtube-nocookie.com"]')
+        };
+      }
+    });
+    const found = (probe && probe.result) || {};
+    if (found.hasNocookieEmbed) await noteSiteAccess("embed");
+    if (!found.hasVideo) return false;
+    if (/^https:\/\/([\w-]+\.)?zoom\.us\/rec\//.test(url)) await noteSiteAccess("zoom");
+    else await noteSiteAccess("site", url);
+    await chrome.scripting.insertCSS({ target: { tabId: tab.id }, files: ["overlay.css"] });
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ["i18n.js", "platform.js", "live.js", "content.js"]
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // The content script reports which adapter booted; fall back to YouTube so a
 // page we can't reach still reads sensibly.
-const PLATFORM_NAMES = { youtube: "YouTube", vimeo: "Vimeo", bilibili: "Bilibili" };
+const PLATFORM_NAMES = { youtube: "YouTube", vimeo: "Vimeo", bilibili: "Bilibili", zoom: "Zoom" };
 
 // The tab we last found, so a name is still available when the page never
 // answered — which is exactly when we most need to name it, since "refresh the
@@ -208,6 +323,7 @@ function platformFromUrl(url) {
   if (/^https?:\/\/(www\.)?bilibili\.com\//.test(url || "")) return "bilibili";
   if (/^https?:\/\/(player\.)?vimeo\.com\//.test(url || "")) return "vimeo";
   if (/^https?:\/\/(www\.)?youtube\.com\//.test(url || "")) return "youtube";
+  if (/^https?:\/\/([\w-]+\.)?zoom\.us\/rec\//.test(url || "")) return "zoom";
   return "";
 }
 
@@ -347,6 +463,75 @@ async function saveApiKey(provider, value) {
   await chrome.storage.sync.set({ ydsSettings: { ...DEFAULTS, ...cur, apiKeys } });
 }
 
+// The Live tab's own translator, model and API keys — all separate from the
+// Translate tab's, keys included, so the two can be billed and revoked apart.
+// The key field behaves like the Translate tab's: saved as you type, shown
+// masked with a tick once stored, and locked until Edit is pressed.
+let liveKeyEditing = false;
+let liveKeySaveTimer = null;
+
+async function currentSettings() {
+  return { ...DEFAULTS, ...((await chrome.storage.sync.get(["ydsSettings"])).ydsSettings || {}) };
+}
+
+function setLiveKeyEditing(editing) {
+  liveKeyEditing = editing;
+  const input = $("liveApiKey");
+  input.disabled = !editing && !!input.value;
+  $("editLiveApiKey").textContent = editing ? ydsT("done") : ydsT("edit");
+  if (editing) setTimeout(() => input.focus(), 0);
+}
+
+function updateLiveKeyState(hasKey) {
+  const el = $("liveApiKeyState");
+  el.textContent = hasKey ? "✓" : "!";
+  el.className = `keyState ${hasKey ? "ok" : "missing"}`;
+  el.title = hasKey ? ydsT("keySavedTitle") : ydsT("keyMissingTitle");
+}
+
+async function saveLiveKey(value) {
+  const p = $("liveProvider").value;
+  const cur = (await chrome.storage.sync.get(["ydsSettings"])).ydsSettings || {};
+  const liveApiKeys = { ...(cur.liveApiKeys || {}) };
+  if (value) liveApiKeys[p] = value;
+  else delete liveApiKeys[p];
+  await chrome.storage.sync.set({ ydsSettings: { ...DEFAULTS, ...cur, liveApiKeys } });
+  $("status").textContent = value
+    ? ydsT("keySaved", { name: providerName(p) })
+    : ydsT("keyCleared", { name: providerName(p) });
+}
+
+function renderLiveProviderRow(settings) {
+  const legacy = settings.liveUseProvider ? settings.translationProvider : "google";
+  const p = settings.liveProvider && settings.liveProvider !== "google" ? settings.liveProvider : legacy;
+  $("liveProvider").value = p;
+  const paid = p !== "google";
+  $("liveModelRow").hidden = !paid;
+  $("liveKeyRow").hidden = !paid;
+  if (!paid) return;
+  const list = PROVIDER_MODELS[p] || [];
+  const sel = $("liveModel");
+  sel.innerHTML = "";
+  for (const [id, label] of list) {
+    const o = document.createElement("option");
+    o.value = id;
+    o.textContent = label;
+    sel.appendChild(o);
+  }
+  const chosen = (settings.liveModels || {})[p];
+  sel.value = chosen && list.some(([id]) => id === chosen) ? chosen : (list[0] ? list[0][0] : "");
+  const key = (settings.liveApiKeys || {})[p] || "";
+  // Not while the viewer is typing in it: a save re-renders this, and
+  // resetting the field then would throw away what they are entering.
+  if (!liveKeyEditing) {
+    const input = $("liveApiKey");
+    input.value = key;
+    input.placeholder = KEY_PLACEHOLDERS[p] || ydsT("pasteHere");
+    setLiveKeyEditing(!key);
+  }
+  updateLiveKeyState(!!key || !!$("liveApiKey").value.trim());
+}
+
 function applyProviderUI(settings) {
   const p = $("provider").value;
   const needsKey = p !== "google";
@@ -451,6 +636,8 @@ function backToModelList(provider) {
 }
 
 function statusTextFor(info, tab) {
+  if (!tab && fileAccessBlocked) return ydsT("statusFileAccess");
+  if (!tab && siteAccessNeeded && siteAccessNeeded.kind === "embed") return ydsT("siteAccessEmbed");
   if (!tab) return ydsT("statusNoTab");
   if (!info || !info.videoId) return ydsT("statusNoComm", { platform: platformName(info) });
 
@@ -462,6 +649,10 @@ function statusTextFor(info, tab) {
     if (info.live.status === "listening") return ydsT("statusLiveRunning");
     return ydsT("liveUnavailable");
   }
+
+  // A page we were injected into with no caption tracks: live is the only
+  // thing to do. With tracks it is like any other site.
+  if (info.platform === "generic" && !(info.tracks && info.tracks.length)) return ydsT("statusGenericLive");
 
   const st = info.translationStatus || {};
   if (st.mode === "native" || info.usingNativeTrack) {
@@ -523,6 +714,11 @@ function statusTextFor(info, tab) {
       : ydsT("statusBilibiliNoTrack");
   }
   if (info.platform === "vimeo") return ydsT("statusVimeoReading");
+  if (info.platform === "zoom") {
+    return (info.tracks && info.tracks.length)
+      ? ydsT("statusZoomReading")
+      : ydsT("statusZoomNoTranscript");
+  }
   return ydsT("statusTurnOnCC");
 }
 
@@ -679,13 +875,13 @@ function showSettings(on) {
   gear.setAttribute("aria-label", label);
 }
 
-function selectTab(which) {
+function selectTab(which, { remember = true } = {}) {
   const live = which === "live";
   $("tabLive").setAttribute("aria-selected", String(live));
   $("tabTranslate").setAttribute("aria-selected", String(!live));
   $("panelLive").hidden = !live;
   $("panelTranslate").hidden = live;
-  try { localStorage.setItem("yds-popup-tab", which); } catch {}
+  if (remember) { try { localStorage.setItem("yds-popup-tab", which); } catch {} }
 }
 
 // The live panel says one of three things: what the feature is (before you
@@ -701,6 +897,7 @@ function renderLivePanel(info) {
   $("liveToggle").textContent = ydsT(running ? "liveStop" : "liveStart");
 
   let msg;
+  let note = "";       // a second line under the status, with the setup link
   let showSetup = false;
   if (!running) {
     msg = ydsT("liveIdle");
@@ -709,6 +906,16 @@ function renderLivePanel(info) {
     msg = ydsT("liveConnecting");
   } else if (st.status === "listening") {
     msg = ydsT("liveListening");
+    // An old recogniser never introduces itself; a current one says whether
+    // its second model loaded. Both are fixed by one more install run, but
+    // they are different news: an update to get, or a download that failed.
+    if (!st.server) {
+      note = ydsT("liveServerOld");
+      showSetup = true;
+    } else if (st.server.refine === false) {
+      note = ydsT("liveRefineMissing");
+      showSetup = true;
+    }
     // Worth saying: a track was found, so the transcription is sitting idle.
     if (info && info.preCuesLoaded) msg += " " + ydsT("liveHasTrack");
   } else {
@@ -716,31 +923,123 @@ function renderLivePanel(info) {
     showSetup = true;
   }
 
+  setLiveStatus(msg, showSetup, note);
+  renderLiveStartHint(!running || st.status === "unavailable");
+}
+
+// Until the recogniser is connected: one sentence on how to start it, and the
+// command ready to copy. On Windows there is nothing to type — the installer
+// left a start.bat to double-click.
+const IS_WINDOWS = /win/i.test((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "");
+function renderLiveStartHint(show) {
+  const box = $("liveStartHint");
+  box.hidden = !show;
+  if (!show) return;
+  $("liveStartText").textContent = ydsT(IS_WINDOWS ? "liveStartWin" : "liveStartMac");
+  $("liveCmdRow").hidden = IS_WINDOWS;
+  $("liveCmdCopy").textContent = ydsT("liveCopy");
+}
+
+// The line under the Start button. An error used to replace the whole line,
+// setup link included — exactly when someone is most likely to need the link.
+function setLiveStatus(msg, showSetup, note) {
   const el = $("liveStatus");
   el.textContent = msg;
-  if (showSetup) {
-    el.appendChild(document.createTextNode(" "));
-    const a = document.createElement("a");
-    a.href = SETUP_URL;
-    a.target = "_blank";
-    a.rel = "noopener";
-    a.textContent = ydsT("liveSetupLink");
-    el.appendChild(a);
+  // An update to install gets its own tinted box, link inside, so it is not
+  // read as part of the "connected" line above it.
+  let linkHost = el;
+  if (note) {
+    const box = document.createElement("div");
+    box.className = "liveNote";
+    box.textContent = note;
+    el.appendChild(box);
+    linkHost = box;
   }
+  if (!showSetup) return;
+  linkHost.appendChild(document.createTextNode(" "));
+  const a = document.createElement("a");
+  a.href = SETUP_URL;
+  a.target = "_blank";
+  a.rel = "noopener";
+  a.textContent = ydsT("liveSetupLink");
+  linkHost.appendChild(a);
 }
 
 const LIVE_ERRORS = {
   "no-video": "liveNoVideo",
   "capture-failed": "liveCaptureFailed",
+  "tab-capture-declined": "liveTabCaptureDeclined",
+  "reopen-after-reload": "liveReopen",
   "no-platform": "liveNoVideo"
 };
+
+// Chrome lets an extension capture a tab only if the tab was "invoked" —
+// the icon clicked — while the extension already held tabCapture. A tab
+// invoked before the permission was granted stays unusable until it reloads,
+// and clicking the icon again does not help: Chrome only records the first
+// click per page load. So the first time, granting is followed by a reload
+// and a fresh click; from then on the permission is already there and one
+// click is enough.
+// What actually clears it is leaving the page's origin: Chrome keeps a tab's
+// "invoked" record across reloads of the same site, so a plain reload left
+// the tab exactly as unusable as before — and since this ran on every click,
+// the page reloaded forever and transcription never started. So the tab is
+// sent to a blank page and straight back, which does start a fresh record,
+// and only once per tab: if it still fails after that, the reason is shown
+// instead of trying again.
+async function reloadForTabCapture(detail) {
+  const key = `ydsTabCapReset_${activeTabId}`;
+  let done = false;
+  try { done = !!(await chrome.storage.session.get(key))[key]; } catch {}
+  if (done) return { ok: false, error: "capture-failed", detail: detail || "" };
+  try {
+    await chrome.storage.session.set({ [key]: true });
+    const tab = await chrome.tabs.get(activeTabId);
+    const url = tab.url;
+    if (!url) return { ok: false, error: "capture-failed", detail: detail || "" };
+    await chrome.tabs.update(activeTabId, { url: "about:blank" });
+    await new Promise(r => setTimeout(r, 350));
+    await chrome.tabs.update(activeTabId, { url });
+  } catch (e) {
+    return { ok: false, error: "capture-failed", detail: String((e && e.message) || e) };
+  }
+  return { ok: false, error: "reopen-after-reload" };
+}
+
+async function startLiveFromTabAudio() {
+  const perm = { permissions: ["tabCapture"] };
+  let had = false;
+  try { had = await chrome.permissions.contains(perm); } catch {}
+  if (!had) {
+    // Said before Chrome's dialog, whose own wording ("all your data on all
+    // websites") describes the permission class, not what this does with it.
+    setLiveStatus(ydsT("liveTabCaptureAsk"), false);
+    let granted = false;
+    try { granted = await chrome.permissions.request(perm); } catch {}
+    if (!granted) return { ok: false, error: "tab-capture-declined" };
+    return reloadForTabCapture();
+  }
+  const res = await sendContent(activeTabId, { type: "YDS_LIVE_START", tabAudio: true });
+  if (res && res.ok === false && /not been invoked/i.test(res.detail || "")) return reloadForTabCapture(res.detail);
+  return res;
+}
 
 async function toggleLive(info) {
   if (!activeTabId) return;
   const running = !!(info && info.live && info.live.active);
-  const res = await sendContent(activeTabId, { type: running ? "YDS_LIVE_STOP" : "YDS_LIVE_START" });
+  let res = await sendContent(activeTabId, { type: running ? "YDS_LIVE_STOP" : "YDS_LIVE_START" });
+  // The video would not let us tap it directly (a local file, a cross-origin
+  // stream). Capturing the whole tab always works, but takes a permission we
+  // only ask for now — still inside this click, which the request needs.
+  if (!running && res && res.ok === false && res.error === "capture-failed") {
+    res = await startLiveFromTabAudio();
+  }
   if (res && res.ok === false) {
-    $("liveStatus").textContent = ydsT(LIVE_ERRORS[res.error] || "liveUnavailable");
+    // Chrome's own reason, when there is one: "could not tap the audio" covers
+    // half a dozen different refusals, and only the reason says which.
+    const known = res.error === "reopen-after-reload" || res.error === "tab-capture-declined";
+    const why = !known && res.detail ? ` (${res.detail})` : "";
+    setLiveStatus(ydsT(LIVE_ERRORS[res.error] || "liveUnavailable") + why, !known);
     return;
   }
   // Give the socket a moment to land on connected-or-not before re-reading.
@@ -763,6 +1062,7 @@ async function init() {
   renderShortcutHint();
 
   $("enabled").checked = !!settings.enabled;
+  $("transcriptPanelBilingual").checked = settings.transcriptPanelBilingual !== false;
   $("uiLang").value = settings.uiLang || "auto";
   $("subtitleMode").value = settings.subtitleMode || "inline";
   $("takeoverCaptions").checked = !!settings.takeoverCaptions;
@@ -782,6 +1082,7 @@ async function init() {
   $("provider").value = settings.translationProvider || "google";
   $("paidApiMode").value = settings.paidApiMode || "ask";
   applyProviderUI(settings);
+  renderLiveProviderRow(settings);
 
   const tab = await getActiveSupportedTab();
   activeTabId = tab ? tab.id : null;
@@ -789,18 +1090,29 @@ async function init() {
   if (tab && !info) info = await askContent(tab.id);
 
   populateLanguages(info);
+  renderSiteAccess();
+  // Only Zoom has a transcript panel to put a translation into.
+  $("transcriptPanelRow").hidden = !(info && info.platform === "zoom");
   $("lang").value = settings.secondLang || "";
 
   if (!tab) {
     $("videoInfo").textContent = "";
   } else if (info && info.videoId) {
-    $("videoInfo").textContent = info.videoId;
+    // A Zoom recording id is a 100-character token; the meeting topic is
+    // what the viewer actually recognises.
+    $("videoInfo").textContent =
+      ((info.platform === "zoom" || info.platform === "generic") && info.videoTitle) || info.videoId;
   }
   $("status").textContent = statusTextFor(info, tab);
   renderLivePanel(info);
   let savedTab = "translate";
   try { savedTab = localStorage.getItem("yds-popup-tab") || "translate"; } catch {}
-  selectTab(savedTab);
+  // Nothing to translate on a generic page, so open where the work is —
+  // without saving it as the viewer's preferred tab.
+  if (info && info.platform === "generic" && !(info.tracks && info.tracks.length)) {
+    selectTab("live", { remember: false });
+  }
+  else selectTab(savedTab);
   if (info?.translationStatus?.mode === "translating") startStatusPolling();
 
   $("enabled").addEventListener("change", (e) => save({ enabled: e.target.checked }));
@@ -809,6 +1121,12 @@ async function init() {
   $("liveToggle").addEventListener("click", async () => {
     const fresh = activeTabId ? await askContent(activeTabId) : null;
     toggleLive(fresh);
+  });
+
+  $("siteAccessBtn").addEventListener("click", requestSiteAccess);
+
+  $("transcriptPanelBilingual").addEventListener("change", async (e) => {
+    await save({ transcriptPanelBilingual: e.target.checked });
   });
 
   $("translationOnly").addEventListener("change", async (e) => {
@@ -838,9 +1156,18 @@ async function init() {
         if (chrome.runtime.lastError) resolve(null); else resolve(r);
       });
     });
+    if (res && res.busy) {
+      // The progress stays: "how far along is it" is exactly what someone
+      // told to wait wants to know.
+      const info = await askContent(tab.id);
+      const progress = info ? statusTextFor(info, tab) : "";
+      pinStatus([progress, ydsT("srtBusy")].filter(Boolean).join(" "), 4000);
+      return;
+    }
     if (!res || !res.ok) { $("status").textContent = ydsT("srtEmpty"); return; }
-    $("status").textContent = ydsT(res.from === "live" ? "srtSavedLive" : "srtSaved",
-                                   { n: res.cueCount });
+    let saved = ydsT(res.from === "live" ? "srtSavedLive" : "srtSaved", { n: res.cueCount });
+    if (res.untranslated) saved += " " + ydsT("srtSomeUntranslated", { n: res.untranslated });
+    pinStatus(saved);
   });
 
   $("uiLang").addEventListener("change", async (e) => {
@@ -949,6 +1276,52 @@ async function init() {
     }
   });
   $("modelUseList").addEventListener("click", () => backToModelList($("provider").value));
+
+  $("liveCmdCopy").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText($("liveCmd").textContent);
+      $("liveCmdCopy").textContent = ydsT("liveCopied");
+      setTimeout(() => { $("liveCmdCopy").textContent = ydsT("liveCopy"); }, 1500);
+    } catch {}
+  });
+
+  $("liveProvider").addEventListener("change", async (e) => {
+    // liveUseProvider is the switch this replaced; cleared so it cannot
+    // override the choice made here.
+    liveKeyEditing = false;
+    await save({ liveProvider: e.target.value, liveUseProvider: false });
+    renderLiveProviderRow(await currentSettings());
+  });
+  $("liveModel").addEventListener("change", async (e) => {
+    const cur = await currentSettings();
+    await save({ liveModels: { ...(cur.liveModels || {}), [$("liveProvider").value]: e.target.value } });
+  });
+  $("editLiveApiKey").addEventListener("click", async () => {
+    if (liveKeyEditing) {
+      clearTimeout(liveKeySaveTimer);
+      const value = $("liveApiKey").value.trim();
+      liveKeyEditing = false;
+      await saveLiveKey(value);
+      updateLiveKeyState(!!value);
+      setLiveKeyEditing(false);
+    } else {
+      setLiveKeyEditing(true);
+    }
+  });
+  $("liveApiKey").addEventListener("click", () => {
+    if ($("liveApiKey").disabled) setLiveKeyEditing(true);
+  });
+  $("liveApiKey").addEventListener("input", (e) => {
+    updateLiveKeyState(!!e.target.value.trim());
+    clearTimeout(liveKeySaveTimer);
+    liveKeySaveTimer = setTimeout(() => saveLiveKey(e.target.value.trim()), 500);
+  });
+  $("liveApiKey").addEventListener("change", async (e) => {
+    clearTimeout(liveKeySaveTimer);
+    const value = e.target.value.trim();
+    await saveLiveKey(value);
+    updateLiveKeyState(!!value);
+  });
 
   $("provider").addEventListener("change", async (e) => {
     await save({ translationProvider: e.target.value });

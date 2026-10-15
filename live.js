@@ -26,8 +26,20 @@
     audioCtx: null,
     nodes: null,
     reconnectTimer: null,
+    // Tab mode: the audio comes from chrome.tabCapture in the extension's
+    // offscreen document (see offscreen.js), which also owns the socket. We
+    // only relay start/stop/reset and receive text.
+    tabMode: false,
     handlers: {}
   };
+
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (!msg || msg.type !== "YDS_TABCAP_EVENT" || !state.tabMode || !state.running) return;
+    const ev = msg.event || {};
+    if (ev.kind === "text" && state.handlers.onText) state.handlers.onText(ev.text, !!ev.final);
+    if (ev.kind === "hello" && state.handlers.onHello) state.handlers.onHello(ev.hello);
+    if (ev.kind === "status") emitStatus(ev.status);
+  });
 
   function emitStatus(status, detail) {
     if (state.handlers.onStatus) state.handlers.onStatus(status, detail || "");
@@ -93,6 +105,10 @@
     ws.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data);
+        if (msg && msg.type === "hello") {
+          if (state.handlers.onHello) state.handlers.onHello(msg);
+          return;
+        }
         if (msg && typeof msg.text === "string" && state.handlers.onText) {
           state.handlers.onText(msg.text, !!msg.final);
         }
@@ -115,15 +131,31 @@
 
     // handlers: { onText(text, isFinal), onStatus(status, detail) }
     // status is one of: connecting | listening | unavailable | stopped
-    async start(video, handlers) {
+    async start(video, handlers, opts) {
       if (state.running) return { ok: true };
-      if (!video) return { ok: false, error: "no-video" };
       state.handlers = handlers || {};
+      if (opts && opts.tabAudio) {
+        let res;
+        try {
+          res = await chrome.runtime.sendMessage({ type: "YDS_TABCAP_START" });
+        } catch (err) {
+          res = { ok: false, error: err && err.message };
+        }
+        if (!res || !res.ok) {
+          return { ok: false, error: "capture-failed", detail: res && res.error };
+        }
+        state.tabMode = true;
+        state.running = true;
+        emitStatus("connecting");
+        return { ok: true };
+      }
+      if (!video) return { ok: false, error: "no-video" };
       try {
         await startCapture(video);
       } catch (err) {
         stopCapture();
-        // Autoplay policy, or a DRM-protected stream that refuses to be tapped.
+        // Media Chrome counts as cross-origin (file://, another domain's CDN),
+        // or DRM. The popup answers this by retrying in tab mode.
         return { ok: false, error: "capture-failed", detail: err && err.message };
       }
       state.running = true;
@@ -134,6 +166,12 @@
 
     stop() {
       state.running = false;
+      if (state.tabMode) {
+        state.tabMode = false;
+        chrome.runtime.sendMessage({ type: "YDS_TABCAP_STOP" }).catch(() => {});
+        emitStatus("stopped");
+        return;
+      }
       clearTimeout(state.reconnectTimer);
       state.reconnectTimer = null;
       if (state.ws) {
@@ -147,6 +185,10 @@
     // Tell the recognizer to drop the sentence it is part-way through: after a
     // seek or a video change, its buffered audio no longer relates to anything.
     reset() {
+      if (state.tabMode) {
+        chrome.runtime.sendMessage({ type: "YDS_TABCAP_RESET" }).catch(() => {});
+        return;
+      }
       if (state.ws && state.ws.readyState === WebSocket.OPEN) {
         state.ws.send(JSON.stringify({ type: "reset" }));
       }

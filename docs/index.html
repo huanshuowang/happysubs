@@ -19,14 +19,14 @@
       document.head.appendChild(tag);
     }
   </script>
-  <title>HappySubs — 双语字幕与实时听译 For YouTube / Vimeo / Bilibili</title>
-  <meta name="description" content="在 YouTube、Vimeo、B站 上同时显示两种语言的字幕；没有字幕的视频还能实时听译。使用自带字幕或Google免费翻译，支持使用Claude / OpenAI / Gemini / DeepSeek 翻译。" />
+  <title>HappySubs — 双语字幕与实时听译 For YouTube / Vimeo / Zoom / Bilibili</title>
+  <meta name="description" content="在 YouTube、Vimeo、B站 和 Zoom 录像上同时显示两种语言的字幕；没有字幕的视频还能实时听译。使用自带字幕或Google免费翻译，支持使用Claude / OpenAI / Gemini / DeepSeek 翻译。" />
   <link rel="icon" type="image/png" sizes="32x32" href="icons/icon32.png" />
   <link rel="icon" type="image/png" sizes="128x128" href="icons/icon128.png" />
   <!-- What a shared link unfurls into: the film's end card, with the button on it. -->
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://huanshuowang.com/happysubs/" />
-  <meta property="og:title" content="HappySubs — Dual subtitles for YouTube, Vimeo & Bilibili" />
+  <meta property="og:title" content="HappySubs — Dual subtitles for YouTube, Vimeo, Zoom & Bilibili" />
   <meta property="og:description" content="Two subtitle languages at once, in sync to the frame. Free on the Chrome Web Store." />
   <meta property="og:image" content="https://huanshuowang.com/happysubs/media/happysubs-og.jpg" />
   <meta property="og:image:width" content="1200" />
@@ -74,7 +74,22 @@
       background: rgba(15,15,15,0.85);
       z-index: 10;
     }
-    nav .container { display: flex; align-items: center; justify-content: space-between; }
+    nav .container { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+    /* Section links: hidden over the hero, which is its own table of contents,
+       and shown with the install button once it has scrolled away. */
+    .nav-links {
+      display: flex; gap: 22px; margin: 0 auto 0 36px;
+      opacity: 0; visibility: hidden; transform: translateY(-6px);
+      transition: opacity .2s, transform .2s, visibility .2s;
+    }
+    .nav-links.show { opacity: 1; visibility: visible; transform: none; }
+    .nav-links a { color: var(--text-dim); font-size: 14px; font-weight: 500; white-space: nowrap; }
+    .nav-links a:hover, .nav-links a.here { color: var(--text); text-decoration: none; }
+    @media (max-width: 860px) { .nav-links { display: none; } }
+    /* A jump lands with the heading clear of the sticky nav. */
+    section[id] { scroll-margin-top: 76px; }
+    html { scroll-behavior: smooth; }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
     .logo { display: flex; align-items: center; color: inherit; text-decoration: none; }
     /* The wordmark is 6.72:1, so height alone sizes it. It draws in
        currentColor, which keeps it legible on this dark nav. */
@@ -197,12 +212,15 @@
       font-weight: 700;
     }
     .os-panel[hidden] { display: none; }
-    .os-panel ol { padding-left: 20px; margin: 12px 0; }
-    .os-panel ol li { margin: 18px 0; }
+    .os-panel ol, #live .container > ol { padding-left: 22px; margin: 10px 0; }
+    .os-panel ol li, #live .container > ol li { margin: 10px 0; }
     .os-panel ol li p { margin: 0 0 8px; }
+    /* The numbered steps of the setup walkthrough. */
+    #live h4 { font-size: 18px; font-weight: 700; margin: 30px 0 8px; }
+    #live .os-panel h4:first-child { margin-top: 18px; }
     .features-2 {
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      max-width: 760px;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      max-width: 1040px;
       margin: 0 auto;
     }
     .live-note {
@@ -621,6 +639,13 @@
           </g>
         </svg>
       </a>
+      <div class="nav-links" id="navLinks">
+        <a href="#features" data-en="Features">功能</a>
+        <a href="#install" data-en="Install">安装</a>
+        <a href="#live" data-en="Live transcription">实时听译</a>
+        <a href="#changelog" data-en="Changelog">更新日志</a>
+        <a href="#faq" data-en="FAQ">常见问题</a>
+      </div>
       <div class="nav-right">
         <button class="lang-toggle" id="langToggle" type="button" aria-label="Switch language">EN</button>
         <a class="nav-cta" id="navCta" href="https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf?utm_source=website&amp;utm_medium=nav&amp;utm_campaign=film_launch" target="_blank" rel="noopener" data-en="Add to Chrome">添加到 Chrome</a>
@@ -632,9 +657,9 @@
     <div class="container">
       <img class="hero-mark" src="icons/icon128.png" width="128" height="128" alt="" />
       <h1 data-en="Dual subtitles for your videos">为视频添加双语字幕</h1>
-      <div class="version-pill">v2.1.2</div>
-      <p class="sub" data-en="Currently supports <strong>YouTube</strong>, <strong>Vimeo</strong> and <strong>Bilibili</strong>. Uses the video's own subtitles plus free Google Translate, with optional Claude / OpenAI / Gemini / DeepSeek AI translation. Videos with no subtitles at all can be transcribed as they play.">
-        目前支持 <strong>YouTube</strong>、<strong>Vimeo</strong> 和 <strong>Bilibili</strong>。使用视频自带字幕 + Google 免费翻译，也可选 Claude / OpenAI / Gemini / DeepSeek AI 翻译。完全没有字幕的视频，可以边播边听译。
+      <div class="version-pill">v2.2.0</div>
+      <p class="sub" data-en="Currently supports <strong>YouTube</strong>, <strong>Vimeo</strong>, <strong>Bilibili</strong> and <strong>Zoom recordings</strong>, plus more sites such as Coursera. Uses the video's own subtitles plus free Google Translate, with optional Claude / OpenAI / Gemini / DeepSeek AI translation. Videos with no subtitles at all can be transcribed as they play.">
+        目前支持 <strong>YouTube</strong>、<strong>Vimeo</strong>、<strong>Bilibili</strong> 和 <strong>Zoom 录像</strong>，以及 Coursera 等更多网站。使用视频自带字幕 + Google 免费翻译，也可选 Claude / OpenAI / Gemini / DeepSeek AI 翻译。完全没有字幕的视频，可以边播边听译。
       </p>
       <a class="cta" id="heroCta" href="https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf?utm_source=website&amp;utm_medium=hero&amp;utm_campaign=film_launch" target="_blank" rel="noopener" data-en="Add to Chrome — it’s free">
         添加到 Chrome · 免费
@@ -681,8 +706,8 @@
       <div class="features">
         <div class="feature">
           <div class="icon">🎬</div>
-          <h3 data-en="Three platforms">三个平台</h3>
-          <p data-en="The major video platforms — YouTube, Vimeo and Bilibili — all handled by one extension.">支持主流视频平台 YouTube、Vimeo 和 Bilibili，一个扩展全托管。</p>
+          <h3 data-en="Many platforms">多平台支持</h3>
+          <p data-en="YouTube, Vimeo, Bilibili and Zoom recordings, and more sites such as Coursera — YouTube embedded in other pages included.">支持 YouTube、Vimeo、Bilibili、Zoom 录像，以及 Coursera 等更多网站；嵌在其他网页里的 YouTube 也支持。</p>
         </div>
         <div class="feature">
           <div class="icon">🎙️</div>
@@ -707,7 +732,7 @@
         <div class="feature">
           <div class="icon">⬇️</div>
           <h3 data-en="Download the subtitles">字幕可下载</h3>
-          <p data-en="Export what you are watching as an .srt file. Choose both languages, the original alone, or the translation alone. The filename carries the video, the channel and the languages, so a folder of them stays easy to sort through.">把正在看的字幕导出成 .srt 格式。可选双语、仅原文、或仅译文。文件名包含视频名、频道名和语言，方便整理归档。</p>
+          <p data-en="Export what you are watching as an .srt file. Choose both languages, the original alone, or the translation alone — or a bilingual transcript to read as notes. The filename carries the video, the channel and the languages, so a folder of them stays easy to sort through.">把正在看的字幕导出成 .srt 格式。可选双语、仅原文、或仅译文，也可以导出成适合做笔记的双语文稿。文件名包含视频名、频道名和语言，方便整理归档。</p>
         </div>
         <div class="feature">
           <div class="icon">🔐</div>
@@ -764,8 +789,8 @@
           <div class="num">2</div>
           <div class="body">
             <h3 data-en="Open a video">打开视频</h3>
-            <p data-en="On YouTube, click the <kbd>CC</kbd> button to turn on native captions (in the language you want to learn) — the extension needs them. On Vimeo and Bilibili it reads the subtitle track directly, so captions are optional there. If a video has no subtitles at all, use <a href=&quot;#live&quot;>live transcription</a>.">
-              YouTube 上点右下角的 <kbd>CC</kbd> 按钮开启原生字幕（你想学的那种语言），扩展要靠它拿字幕。Vimeo 和 B站 上扩展直接读字幕轨，字幕开不开都行。完全没有字幕的视频，用<a href="#live">实时听译</a>。
+            <p data-en="On YouTube, click the <kbd>CC</kbd> button to turn on native captions (in the language you want to learn) — the extension needs them. On Vimeo, Bilibili and Zoom recordings it reads the subtitle track or transcript directly, so captions are optional there. On other sites such as Coursera, click the HappySubs icon on the page with the video. If a video has no subtitles at all, use <a href=&quot;#live&quot;>live transcription</a>.">
+              YouTube 上点右下角的 <kbd>CC</kbd> 按钮开启原生字幕（你想学的那种语言），扩展要靠它拿字幕。Vimeo、B站 和 Zoom 录像上扩展直接读字幕轨或转录稿，字幕开不开都行。Coursera 等其他网站上，在有视频的页面点一下 HappySubs 图标。完全没有字幕的视频，用<a href="#live">实时听译</a>。
             </p>
           </div>
         </div>
@@ -790,7 +815,7 @@
   <section id="live">
     <div class="container">
       <h2 data-en="Live transcription">实时听译</h2>
-      <p class="section-desc" data-en="Creates subtitles for videos that have no subtitle track at all. Optional, and currently Chinese and English.">为完全没有字幕轨的视频创造字幕。可选功能，目前支持中英双语。</p>
+      <p class="section-desc" data-en="Creates subtitles for videos that have no subtitle track at all. Optional. Understands spoken Chinese, English, Japanese, Korean and Cantonese.">为完全没有字幕轨的视频创造字幕。可选功能，能听懂中文、英语、日语、韩语、粤语。</p>
 
       <div class="features features-2">
         <div class="feature">
@@ -800,13 +825,18 @@
         </div>
         <div class="feature">
           <div class="icon">🗣️</div>
-          <h3 data-en="Chinese and English">中英双语</h3>
-          <p data-en="A bilingual streaming model: Chinese speech comes out Chinese, English comes out English, and code-switching within one sentence is handled too.">中英双语流式模型：中文出中文，英文出英文，一句话里中英混说也认得。</p>
+          <h3 data-en="Two passes, five languages">两遍识别，五种语言</h3>
+          <p data-en="Chinese and English appear word by word as they are spoken; when a sentence ends, a second model re-recognises it and replaces it with a more accurate, punctuated line. Japanese, Korean and Cantonese appear sentence by sentence.">中文和英语边说边出字；每句说完后，第二个模型把这一句重新识别一遍，换成更准、带标点的版本。日语、韩语、粤语按整句出现。</p>
+        </div>
+        <div class="feature">
+          <div class="icon">💬</div>
+          <h3 data-en="Whole sentences, steady">整句翻译，不再跳</h3>
+          <p data-en="Each sentence is translated once it is finished and then stays put. Free Google Translate by default; in the Live transcribe tab you can pick an AI translator with its own API key, which reads the two sentences before for context — about ¥0.2 an hour with DeepSeek in our test.">每句说完后整句翻译，出现后不再变。默认用免费的 Google 翻译；也可以在「实时听译」标签里单独选 AI 翻译和 API Key，翻译时会参考前两句。我们实测 DeepSeek 一小时约两毛钱。</p>
         </div>
       </div>
 
-      <h3 style="margin-top:36px" data-en="Install the local service">安装本地识别服务</h3>
-      <p data-en="Needs Python 3 on your system. The extension itself is the same everywhere — this local service is the only part that differs by operating system.">需要系统装有 Python 3。插件本身各平台通用，只有这个本地服务的安装方式分系统。</p>
+      <h3 style="margin-top:36px" data-en="How to set it up">怎么装、怎么用</h3>
+      <p data-en="Four steps: install once, then start, turn on and turn off each time. Steps 1 and 2 differ by operating system — pick yours.">一共四步：安装只做一次，之后每次是启动、开启、关闭。第 1、2 步分系统，先选你的系统。</p>
 
       <div class="os-tabs" role="tablist" aria-label="Operating system">
         <button type="button" class="os-tab" data-os="unix" role="tab" aria-selected="true">macOS / Linux</button>
@@ -814,27 +844,36 @@
       </div>
 
       <div class="os-panel" data-os="unix" role="tabpanel">
-        <p data-en="One command, no clone — it creates a happysubs-server folder here, builds the Python environment, and downloads the model from the sherpa-onnx project's own release (about 500MB compressed, 193MB kept).">一条命令，不用 clone 仓库——脚本会在当前位置建一个 <code>happysubs-server</code> 文件夹，装好 Python 环境，并从 sherpa-onnx 项目自己的 release 下载模型（约 500MB 压缩包，解压后保留 193MB）。</p>
+        <h4 data-en="1. Install (once)">1. 安装（只做一次）</h4>
+        <ol>
+          <li data-en="Open <strong>Terminal</strong>. On a Mac: press <kbd>⌘</kbd>+<kbd>Space</kbd>, type Terminal, press Return.">打开<strong>终端</strong>。Mac 上：按 <kbd>⌘</kbd>+<kbd>空格</kbd>，输入「终端」或 Terminal，回车。</li>
+          <li>
+            <p data-en="Paste this line and press Return:">粘贴下面这一行，回车：</p>
+            <pre class="cmd">curl -fsSL https://raw.githubusercontent.com/huanshuowang/happysubs/main/setup.sh | bash</pre>
+          </li>
+          <li data-en="Wait for it to finish. It creates a <code>happysubs-server</code> folder and downloads the speech models (about 650MB), so it takes a few minutes. When you see <strong>安装完成</strong> (installation complete), it is done.">等它跑完。它会建一个 <code>happysubs-server</code> 文件夹，并下载语音识别模型（约 650MB），需要几分钟。看到<strong>「安装完成」</strong>就装好了。</li>
+        </ol>
+        <p class="live-note" data-en="Needs Python 3, which Macs and most Linux systems already have.">需要 Python 3，Mac 和大多数 Linux 自带。</p>
 
-        <pre class="cmd">curl -fsSL https://raw.githubusercontent.com/huanshuowang/happysubs/main/setup.sh | bash</pre>
-        <p class="live-note" data-en="You only ever run this once. When it finishes it prints the one command you will use from then on — the line below.">这条只跑一次。跑完它会打印出你以后每次要用的那一条命令，也就是下面这个。</p>
-
-        <p data-en="Every time after that — start it and leave it running while you watch:"><strong>以后每次</strong>——启动它，看视频期间让它一直开着：</p>
-
-        <pre class="cmd">~/happysubs-server/start.sh</pre>
-        <p class="live-note" data-en="That path assumes you ran the install from your home folder; if you ran it elsewhere, use that folder instead — the installer prints the exact line when it finishes. Forgotten where it went? <code>find ~ -maxdepth 4 -name start.sh -path '*happysubs-server*'</code> finds it. The script works from any directory, so there is no cd to get right.">这个路径假设你是在主目录下安装的；装在别处就换成那个位置——安装结束时脚本会打印完整的那一行。忘了装在哪：<code>find ~ -maxdepth 4 -name start.sh -path '*happysubs-server*'</code> 能找出来。这个脚本在任何目录下运行都行，不需要先 cd。</p>
-
-        <p class="live-note" data-en="Port already in use: run lsof -ti:8765 | xargs kill and start again. If you have cloned the whole repository, running ./setup.sh from its root does the same thing.">端口被占用时执行 <code>lsof -ti:8765 | xargs kill</code> 再重启。已经 clone 了整个仓库的话，在仓库根目录跑 <code>./setup.sh</code> 效果一样。</p>
+        <h4 data-en="2. Start the recogniser (each time, before watching)">2. 启动识别服务（每次看视频前）</h4>
+        <ol>
+          <li>
+            <p data-en="Open Terminal, paste this line and press Return:">打开终端，粘贴下面这一行，回车：</p>
+            <pre class="cmd">~/happysubs-server/start.sh</pre>
+          </li>
+          <li data-en="When you see <code>监听 ws://127.0.0.1:8765</code>, it is running. Leave this window open while you watch.">看到 <code>监听 ws://127.0.0.1:8765</code> 就是启动好了。看视频期间，这个窗口一直开着。</li>
+        </ol>
+        <p class="live-note" data-en="If it says the file is not found, you installed somewhere other than your home folder — use the line the installer printed at the end. If it says the port is in use, run <code>lsof -ti:8765 | xargs kill</code> and start again.">提示找不到文件：说明你不是在主目录下安装的，改用安装结束时打印的那一行。提示端口被占用：先执行 <code>lsof -ti:8765 | xargs kill</code>，再启动。</p>
       </div>
 
       <div class="os-panel" data-os="win" role="tabpanel" hidden>
-        <p data-en="There is no shell script for Windows — these three steps do the same thing the script does on macOS.">Windows 上没有现成的脚本，下面三步做的是和 macOS 那个脚本一样的事。</p>
+        <h4 data-en="1. Install (once)">1. 安装（只做一次）</h4>
         <ol>
           <li>
             <p data-en='Install Python from <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a>, and tick <strong>Add python.exe to PATH</strong> in the installer.'>到 <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a> 下载 Windows 安装包，安装时记得勾上 <strong>Add python.exe to PATH</strong>。</p>
           </li>
           <li>
-            <p data-en="Open PowerShell (Start menu → type PowerShell) and paste the whole block below. It creates a happysubs-server folder in the current directory, builds the Python environment, and downloads the four model files — about 190MB, nothing to unpack.">打开 PowerShell（开始菜单搜 PowerShell），把下面整段一起粘进去回车。它会在当前目录建一个 <code>happysubs-server</code> 文件夹，装好 Python 环境，并下载 4 个模型文件——约 190MB，不用解压。</p>
+            <p data-en="Open <strong>PowerShell</strong> (Start menu → type PowerShell), paste the whole block below and press Enter. It creates a <code>happysubs-server</code> folder and downloads the speech models (about 420MB), so it takes a few minutes. When the prompt comes back, it is done.">打开 <strong>PowerShell</strong>（开始菜单搜 PowerShell），把下面整段一起粘进去，回车。它会建一个 <code>happysubs-server</code> 文件夹，并下载语音识别模型（约 420MB），需要几分钟。光标重新出现就装好了。</p>
             <pre class="cmd"># Without this, PowerShell's progress bar makes large downloads roughly ten times slower.
 $ProgressPreference = "SilentlyContinue"
 
@@ -855,23 +894,40 @@ foreach ($f in "tokens.txt", "encoder-epoch-99-avg-1.int8.onnx",
 }
 cd ..
 
+# The second-pass model: more accurate, punctuated, and Japanese / Korean / Cantonese.
+mkdir model-sensevoice -Force | Out-Null
+$sv = "https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main"
+iwr "$sv/model.int8.onnx" -OutFile model-sensevoice\model.int8.onnx
+iwr "$sv/tokens.txt" -OutFile model-sensevoice\tokens.txt
+
 # A launcher to double-click from now on, so there is nothing to retype later.
 iwr "$repo/start.bat" -OutFile start.bat</pre>
           </li>
-          <li>
-            <p data-en="Every time after that — double-click <code>start.bat</code> in the happysubs-server folder and leave the black window open while you watch. There is nothing to type."><strong>以后每次</strong>——双击 <code>happysubs-server</code> 文件夹里的 <code>start.bat</code>，看视频期间让那个黑窗口开着就行，不用输任何命令。</p>
-            <p class="live-note" data-en="Prefer the command line? From inside that folder this does the same thing:">想用命令行的话，在那个文件夹里跑这条一样：</p>
-            <pre class="cmd">.\.venv\Scripts\python.exe server.py</pre>
-          </li>
+        </ol>
+
+        <h4 data-en="2. Start the recogniser (each time, before watching)">2. 启动识别服务（每次看视频前）</h4>
+        <ol>
+          <li data-en="Open the <code>happysubs-server</code> folder and double-click <code>start.bat</code>. A black window opens.">打开 <code>happysubs-server</code> 文件夹，双击 <code>start.bat</code>，会弹出一个黑色窗口。</li>
+          <li data-en="When you see <code>监听 ws://127.0.0.1:8765</code> in it, it is running. Leave that window open while you watch.">窗口里出现 <code>监听 ws://127.0.0.1:8765</code> 就是启动好了。看视频期间，这个窗口一直开着。</li>
         </ol>
 
         <p class="live-note" data-en="Windows notes: if <code>py -3</code> is not recognised, use <code>python</code> instead — the Microsoft Store build of Python does not install the py launcher. Port already in use: <code>netstat -ano | findstr :8765</code> to find the PID, then <code>taskkill /PID &lt;pid&gt; /F</code>. If huggingface.co is unreachable from your network, swap it for <code>hf-mirror.com</code> in the block above — the paths are identical.">Windows 上几点：<code>py -3</code> 提示找不到的话改用 <code>python</code>——从微软商店装的 Python 不带 py 启动器。端口被占用时用 <code>netstat -ano | findstr :8765</code> 查到 PID，再 <code>taskkill /PID &lt;PID&gt; /F</code>。如果访问 huggingface.co 不通，把上面那段里的 <code>huggingface.co</code> 换成 <code>hf-mirror.com</code> 即可，路径完全一样。</p>
       </div>
 
-      <p style="margin-top:24px" data-en="When it prints 监听 ws://127.0.0.1:8765 it is ready. In the extension popup, switch to the Live transcribe tab and press start.">看到 <code>监听 ws://127.0.0.1:8765</code> 就绪。然后在插件弹窗切到「实时听译」标签，点开启。</p>
+      <h4 style="margin-top:28px" data-en="3. Turn on live transcription">3. 开启听译</h4>
+      <ol>
+        <li data-en="Open the video and press play.">打开视频，点播放。</li>
+        <li data-en="Click the HappySubs icon, switch to the <strong>Live transcribe</strong> tab, and press <strong>Start live transcription</strong>. Subtitles appear a few seconds later.">点 HappySubs 图标，切到<strong>「实时听译」</strong>标签，点<strong>「开启实时听译」</strong>。几秒后字幕出现。</li>
+      </ol>
 
-      <p class="live-note" data-en="Notes: press play on the video first — browsers only allow audio processing after you interact with the page. The service handles one page at a time, so several tabs will fight over it. The model and Python environment live in that folder; on a new machine just run the setup again.">
-        几点注意：先点一下视频<strong>播放</strong>，浏览器要求有用户交互才允许处理音频。服务端一次只服务一个页面，同时开多个标签页会互相干扰。模型和 Python 环境都在那个文件夹里，换机器重跑一次安装即可。
+      <h4 style="margin-top:28px" data-en="4. Turn it off">4. 关闭听译</h4>
+      <ol type="a">
+        <li data-en="<strong>Stop the subtitles:</strong> press <strong>Stop live transcription</strong> in the same tab of the popup."><strong>关闭字幕：</strong>在插件弹窗的同一个标签里点「关闭实时听译」。</li>
+        <li data-en="<strong>Stop the recogniser:</strong> press <kbd>Ctrl</kbd>+<kbd>C</kbd> in its terminal window, or close that window (on Windows, the black window). Nothing keeps running in the background."><strong>关闭识别服务：</strong>在它的终端窗口里按 <kbd>Ctrl</kbd>+<kbd>C</kbd>，或者直接关掉那个窗口（Windows 上关掉那个黑色窗口）。关掉之后不会有任何东西留在后台运行。</li>
+      </ol>
+
+      <p class="live-note" data-en="The recogniser handles one page at a time: use it in one tab only. On a new computer, do step 1 again. <strong>Installed before 2.2.0?</strong> Do step 1 once more to get the second pass and the new languages — everything keeps working if you don't.">
+        识别服务一次只能服务一个页面，只在一个标签页里用。换电脑后重做一次第 1 步即可。<strong>2.2.0 之前装过的</strong>：再做一次第 1 步，就有二次识别和新增的语言；不做也照常能用。
       </p>
     </div>
   </section>
@@ -881,6 +937,16 @@ iwr "$repo/start.bat" -OutFile start.bat</pre>
       <h2 data-en="Changelog">更新日志</h2>
 
       <details open>
+        <summary data-en="2.2.0 — Zoom recordings, embedded YouTube, more sites, better live transcription, more languages">2.2.0 — Zoom 录像、嵌入的 YouTube、更多网站、实时听译升级、更多语言</summary>
+        <p data-en="<strong>Zoom recordings</strong>: bilingual subtitles, a translated transcript panel, and a bilingual transcript export."><strong>Zoom 录像</strong>：双语字幕、转录稿栏译文、导出双语文稿。</p>
+        <p data-en="<strong>YouTube embedded in other sites</strong> now gets bilingual subtitles."><strong>嵌在其他网站里的 YouTube</strong> 也有双语字幕了。</p>
+        <p data-en="<strong>More sites</strong> such as Coursera."><strong>更多网站</strong>：支持 Coursera 等。</p>
+        <p data-en="<strong>Live transcription</strong>: more accurate, with punctuation; understands Japanese, Korean and Cantonese too; works on local video files. The translation appears a whole sentence at a time and stays put, and can use your own AI translator and key. Already installed the recogniser? Run the install command once more."><strong>实时听译</strong>：识别更准、带标点；新增日语、韩语、粤语；本地视频也能用。译文整句出现、不再跳动，还可以单独选用 AI 翻译和 API Key。已经装过识别服务的，重新运行一次安装命令即可。</p>
+        <p data-en="<strong>Interface languages</strong>: Traditional Chinese, Japanese and Vietnamese added."><strong>界面语言</strong>：新增繁体中文、日文、越南文。</p>
+        <p data-en="When YouTube auto-translates captions, HappySubs switches back to the original.">YouTube 自动翻译字幕时，HappySubs 会换回原文。</p>
+      </details>
+
+      <details>
         <summary data-en="2.1.2 — steadier subtitles">2.1.2 — 字幕更稳了</summary>
         <p data-en="Subtitles no longer flicker when the line changes or sit on the player&#39;s controls when you pause, and new installs open a short page on getting started.">换句时字幕不再闪一下，暂停时也不再压住控制栏；新装的用户会先看到一页上手说明。</p>
       </details>
@@ -958,7 +1024,7 @@ iwr "$repo/start.bat" -OutFile start.bat</pre>
     <div class="container">
       <span class="bars" aria-hidden="true"><i></i><i></i></span>
       <h2 data-en="Watch anything.<br>Understand everything.">看懂每一个视频。</h2>
-      <p data-en="Free on the Chrome Web Store · YouTube, Vimeo and Bilibili">Chrome 应用商店免费安装 · 支持 YouTube、Vimeo、Bilibili</p>
+      <p data-en="Free on the Chrome Web Store · YouTube, Vimeo, Bilibili and Zoom">Chrome 应用商店免费安装 · 支持 YouTube、Vimeo、Bilibili、Zoom</p>
       <a class="cta cta-lg" href="https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf?utm_source=website&amp;utm_medium=closing&amp;utm_campaign=film_launch" target="_blank" rel="noopener" data-en="Add to Chrome — it’s free">添加到 Chrome · 免费</a>
     </div>
   </section>
@@ -973,12 +1039,12 @@ iwr "$repo/start.bat" -OutFile start.bat</pre>
     (function () {
       const STORAGE_KEY = "yds-site-lang";
       const TITLES = {
-        zh: "HappySubs — 双语字幕与实时听译 For YouTube / Vimeo / Bilibili",
-        en: "HappySubs — Dual Subtitles & Live Captions for YouTube, Vimeo & Bilibili"
+        zh: "HappySubs — 双语字幕与实时听译 For YouTube / Vimeo / Zoom / Bilibili",
+        en: "HappySubs — Dual Subtitles & Live Captions for YouTube, Vimeo, Zoom & Bilibili"
       };
       const DESCRIPTIONS = {
-        zh: "在 YouTube、Vimeo、B站 上同时显示两种语言的字幕；没有字幕的视频还能实时听译。",
-        en: "Two subtitle languages at once on YouTube, Vimeo and Bilibili — plus live transcription for videos with no captions at all."
+        zh: "在 YouTube、Vimeo、B站 和 Zoom 录像上同时显示两种语言的字幕；没有字幕的视频还能实时听译。",
+        en: "Two subtitle languages at once on YouTube, Vimeo, Bilibili and Zoom recordings — plus live transcription for videos with no captions at all."
       };
       const TOGGLE_LABEL = { zh: "EN", en: "中" };
 
@@ -1161,10 +1227,25 @@ iwr "$repo/start.bat" -OutFile start.bat</pre>
     // The nav's install button appears once the hero's has scrolled away.
     (function () {
       const hero = document.getElementById("heroCta"), nav = document.getElementById("navCta");
+      const links = document.getElementById("navLinks");
       if (!hero || !nav || !("IntersectionObserver" in window)) return;
       new IntersectionObserver(([e]) => {
-        nav.classList.toggle("show", !e.isIntersecting && e.boundingClientRect.top < 0);
+        const past = !e.isIntersecting && e.boundingClientRect.top < 0;
+        nav.classList.toggle("show", past);
+        if (links) links.classList.toggle("show", past);
       }).observe(hero);
+      // The link for the section being read is lit.
+      if (!links) return;
+      const byId = new Map([...links.querySelectorAll("a")].map(a => [a.getAttribute("href").slice(1), a]));
+      const spy = new IntersectionObserver((entries) => {
+        for (const e of entries) {
+          if (!e.isIntersecting) continue;
+          for (const a of byId.values()) a.classList.remove("here");
+          const a = byId.get(e.target.id);
+          if (a) a.classList.add("here");
+        }
+      }, { rootMargin: "-45% 0px -50% 0px" });
+      for (const id of byId.keys()) { const sec = document.getElementById(id); if (sec) spy.observe(sec); }
     })();
 
     // Which "Add to Chrome" link was used. Each one already names its place on

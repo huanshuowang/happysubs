@@ -1,8 +1,8 @@
-# HappySubs — YouTube / Vimeo / B站 双语字幕
+# HappySubs — YouTube / Vimeo / Zoom / B站 双语字幕
 
 [![Chrome Web Store](https://img.shields.io/chrome-web-store/v/malocefbdblplamcmmmpilepcgllfmnf?label=Chrome%20Web%20Store&color=ff0033)](https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf?utm_source=github&utm_medium=readme) [![用户](https://img.shields.io/chrome-web-store/users/malocefbdblplamcmmmpilepcgllfmnf?label=users&color=ff0033)](https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf?utm_source=github&utm_medium=readme) [![评分](https://img.shields.io/chrome-web-store/rating/malocefbdblplamcmmmpilepcgllfmnf?label=rating&color=ff0033)](https://chromewebstore.google.com/detail/malocefbdblplamcmmmpilepcgllfmnf?utm_source=github&utm_medium=readme) [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-> 在 **YouTube**、**Vimeo**、**B站** 上同时显示两种语言的字幕；没有字幕的视频还能**实时听译**。使用自带字幕或 Google 免费翻译，也可以用 Claude / OpenAI / Gemini / DeepSeek 翻译。
+> 在 **YouTube**、**Vimeo**、**B站** 和 **Zoom 录像**上同时显示两种语言的字幕；Coursera 等更多网站也能用；没有字幕的视频（包括本地 mp4）还能**实时听译**。使用自带字幕或 Google 免费翻译，也可以用 Claude / OpenAI / Gemini / DeepSeek 翻译。
 
 ![同一句台词，每一拍换一种第二语言；插件弹窗里的「第二语言」跟着切换](docs/media/readme-languages.gif)
 
@@ -19,16 +19,18 @@
 - **🪶 双语合成一条字幕**：原文和译文两行一起出现、一起换，一句一次；自动生成字幕也不再逐字滚动，换成整理好的整句
 - **⚡ 零延迟同步**：拿到整条字幕轨后提前翻译，跟视频时间轴精确对齐
 - **🎯 整句翻译**：合并 ASR 把一句话切成两半的碎片再翻译，比同类扩展效果更好
-- **🎬 三个平台**：YouTube、Vimeo（含嵌在别处的播放器）、B站
-- **🎙️ 实时听译**：给完全没有字幕的视频用（B站上很常见）。抓视频音频，边播边转字幕再翻译。识别在你自己电脑上跑，**音频不出本机**，也没有按分钟计费
+- **🎬 四个平台**：YouTube（含嵌在别处的播放器）、Vimeo（含嵌在别处的播放器）、B站、Zoom 云录像
+- **🧑‍🏫 Zoom 录像**：直接读录像自带的转录稿，不用开 CC；右侧「Audio Transcript」栏每段下面加一行译文（可关）；还能导出带说话人和时间戳的**双语文稿 (.md)**
+- **🌐 更多网站**：Coursera 等网站上，点开扩展图标就能显示双语字幕，还可以设为以后自动启用
+- **🎙️ 实时听译**：给完全没有字幕的视频用（B站上很常见）。抓视频音频，边播边转字幕再翻译。识别在你自己电脑上跑，**音频不出本机**，也没有按分钟计费。能识别中文、英语、日语、韩语、粤语
 - **👁️ 仅翻译模式**：默认跟随播放器——不开原生字幕就不显示翻译。想只看译文的话，在插件弹窗里打开「仅显示翻译字幕」，关着 CC 也能单独显示第二语言
 - **🖱️ 悬停拖动字幕位置**：鼠标碰到字幕就浮出拖拽把手，全屏也能调
-- **⬇️ 导出字幕**：把正在看的字幕存成 .srt，可选双语、仅原文或仅译文，文件名带视频名、频道名和语言
+- **⬇️ 导出字幕**：把正在看的字幕存成 .srt，可选双语、仅原文或仅译文，文件名带视频名、频道名和语言；也可以导出成按段落整理的双语文稿 (.md)
 - **⌨️ 一键开关**：Mac 上 ⌘⇧S，Windows / Linux 上 Alt+Shift+S，不用打开弹窗就能在原文和双语之间切换
 - **🌍 100+ 种语言**：Google Translate 支持的目标语言都能选
 - **🔐 免费可用 · AI 增强可选**：使用视频自带字幕或 Google 免费翻译。需要更高精度时，可选 Claude / OpenAI / Gemini / DeepSeek 增强翻译，可以挑具体模型或自己填模型名，翻译进度显示在视频上方；付费 API 怎么调用由你定（每次询问 / 总是使用 / 只在点按钮时）
 - **🎨 样式可调**：字号、颜色、背景透明度、垂直位置随你调，**原文和译文可以分开设置**，也能锁成同一套；另有**字幕宽度**百分比，在没有原生字幕可对齐时（实时听译、仅翻译模式）生效——画面左右有黑边时调小，字幕就只落在画面里
-- **⚙️ 设置**：弹窗右上角的齿轮里，是字幕外观和面板语言（跟随浏览器 / 中文 / English）
+- **⚙️ 设置**：弹窗右上角的齿轮里，是字幕外观和面板语言（跟随浏览器 / 简体中文 / 繁體中文 / English / 日本語 / Tiếng Việt）
 
 ## 📦 安装
 
@@ -38,13 +40,16 @@
 
 装好之后：
 
-1. **打开视频** — YouTube 上先点 CC 按钮开原生字幕（选你想看的第一种语言）；Vimeo 和 B站 上不用
+1. **打开视频** — YouTube 上先点 CC 按钮开原生字幕（选你想看的第一种语言）；Vimeo、B站 和 Zoom 录像上不用
 2. **点扩展图标** — 选第二语言即可
 
 ## 🎬 使用
 
 - **YouTube**：必须先点播放器右下角的 **CC** 打开原生字幕，扩展才拿得到字幕
 - **Vimeo**：不需要先开 CC——扩展会直接读字幕轨。想同时看到原文再点 CC 就行
+- **Zoom 录像**（`*.zoom.us/rec/…`）：在欢迎页点一次「启用」后，打开录像就自动出字幕，不用开 CC。主持人没开 Audio transcript 的录像没有转录稿，用实时听译
+- **嵌在别的网站里的 YouTube**：`youtube.com` 的嵌入播放器直接可用；`youtube-nocookie.com` 的嵌入播放器需要在欢迎页或弹窗里点一次「启用」。先播放、开 CC，再看字幕
+- **其他网页 / 本地视频**：点扩展图标才会启用（不点就完全不运行）。页面有字幕轨时不用再去开网站自己的字幕，扩展会直接显示双语。常用的网站可以在弹窗顶部点「允许」，以后在这个网站上自动启用。本地文件还需要在 `chrome://extensions` → HappySubs → 详情里打开「允许访问文件网址」
 - 打开后中文（或你选的语言）会自动叠加在原生字幕上方
 - 只想看译文、不想看原文？弹窗里勾上 **仅显示翻译字幕**，之后不开 CC 也会显示
   - YouTube 上扩展会自己向播放器要一次字幕轨（`loadModule` + 切轨 + `unloadModule`），取完把 CC 还原成关着的状态，全程有遮挡不会闪
@@ -81,7 +86,7 @@ YouTube 和 Vimeo 拿字幕的方式正好相反，B站 又是第三种：
 2. 再请求 `api.bilibili.com/x/player/v2`，得到字幕轨列表和每条轨的字幕文件地址；`ai-` 开头的是 AI 生成字幕，人工字幕优先
 3. B站 只对登录用户返回字幕列表——没登录时会显示"没有字幕"，真没有字幕的视频就用下面的实时听译
 
-拿到 cue 之后三个平台走同一条路：合并被切碎的句子 → 整片批量翻译 → 用 `requestAnimationFrame` 跟着 `video.currentTime` 渲染到叠加层。
+拿到 cue 之后所有平台走同一条路：合并被切碎的句子 → 整片批量翻译 → 用 `requestAnimationFrame` 跟着 `video.currentTime` 渲染到叠加层。
 
 ## 🎙️ 实时听译
 
@@ -89,27 +94,53 @@ YouTube 和 Vimeo 拿字幕的方式正好相反，B站 又是第三种：
 
 ![实时听译：边播边识别，识别中的字会随上下文修正](docs/media/readme-live.gif)
 
-三个平台都能用（音频抓取在 YouTube 上实测可行），但主要是给 B站——那里大部分视频没有字幕轨。
+所有支持的平台和本地视频都能用，其他网站大多也可以（点开扩展图标后开启），但主要是给 B站 和本地视频——那里大部分视频没有字幕轨。
+
+**能识别中文、英语、日语、韩语、粤语。** 用了两个模型：sherpa-onnx 的中英双语流式模型负责边说边出字和断句；每句说完后，SenseVoice-small 把这一句重新识别一遍作为定稿，更准、带标点。日语、韩语、粤语没有边说边出字，按整句出现。翻译成哪种语言不受限制。2.2.0 之前装过识别服务的，重新运行一次安装命令就能装上第二个模型；不装也照常能用。
+
+有些视频浏览器不允许直接取音频（本地文件、视频文件放在别的域名上的网站）。这时扩展会改为抓取整个标签页的声音，第一次会请求一个额外的可选权限。
 
 字幕轨比识别准，所以扩展**不会自己**切到听译。但你手动开启听译时它就接管画面，即使这个视频有字幕轨——你按了按钮就该看到东西。关掉听译，字幕轨立刻回来。
 
-### 装本地识别服务
+### 怎么装、怎么用
 
-需要系统有 python3。一条命令，**不用 clone 仓库**：
+**1. 安装（只做一次）**
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/huanshuowang/happysubs/main/setup.sh | bash
-```
+1. 打开终端。Mac 上：按 `⌘+空格`，输入「终端」或 Terminal，回车。
+2. 粘贴下面这一行，回车：
 
-脚本会在当前位置建一个 `happysubs-server/` 文件夹，装好 Python 虚拟环境，并从 [sherpa-onnx 官方 release](https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models) 下载中英双语流式模型（约 500MB 压缩包，解压后保留 193MB）。装好后启动：
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/huanshuowang/happysubs/main/setup.sh | bash
+   ```
 
-```bash
-cd happysubs-server && .venv/bin/python server.py
-```
+3. 等它跑完。它会建一个 `happysubs-server` 文件夹，并下载语音识别模型（约 650MB），需要几分钟。看到「安装完成」就装好了。
+
+需要 Python 3，Mac 和大多数 Linux 自带。Windows 的步骤见[项目主页](https://huanshuowang.com/happysubs/#live)。
+
+**2. 启动识别服务（每次看视频前）**
+
+1. 打开终端，粘贴下面这一行，回车：
+
+   ```bash
+   ~/happysubs-server/start.sh
+   ```
+
+2. 看到 `监听 ws://127.0.0.1:8765` 就是启动好了。看视频期间，这个窗口一直开着。
+
+提示找不到文件：说明不是在主目录下安装的，改用安装结束时打印的那一行。提示端口被占用：先执行 `lsof -ti:8765 | xargs kill`，再启动。
+
+**3. 开启听译**
+
+1. 打开视频，点播放。
+2. 点 HappySubs 图标，切到「实时听译」标签，点「开启实时听译」。几秒后字幕出现。
+
+
+**4. 关闭听译**
+
+- a. 关闭字幕：在弹窗的「实时听译」标签里点「关闭实时听译」
+- b. 关闭识别服务：在它的终端窗口里按 `Ctrl+C`，或者直接关掉那个窗口
 
 已经 clone 了整个仓库的话，在仓库根目录跑 `./setup.sh` 效果一样，服务会装在 `server/` 里。
-
-看到 `监听 ws://127.0.0.1:8765` 就绪。然后在插件弹窗切到「实时听译」标签，点开启。
 
 模型和虚拟环境都不进 git——服务端源码一共 16KB（`server.py` + `requirements.txt` + `setup.sh`），那 193MB 模型是安装时从 sherpa-onnx 官方 release 下的，不占本项目的仓库和带宽。
 
@@ -118,7 +149,7 @@ cd happysubs-server && .venv/bin/python server.py
 - 要**先点一下播放**，浏览器才允许处理音频
 - 暂停视频后字幕会**保留 8 秒**再淡出，够你读完再走。字幕轨模式下不受影响——时间轴停了，那句字幕本来就一直在
 - 服务端一次只服务一个页面，同时开多个标签页会互相干扰
-- 听译的译文固定走 Google 免费翻译，不走付费 API——识别中的句子每秒会重译一次，把这个计费到 LLM 上会是笔意外账单。付费 API 用在字幕轨翻译上（一次性、句数固定）
+- 听译的译文默认走 Google 免费翻译。「实时听译」标签里有自己的翻译源和模型，可以选 Claude / OpenAI / Gemini / DeepSeek，和「直接翻译」完全分开，API Key 也各填各的。只翻译说完的句子，每句只调用一次，并把前两句（已经翻好的）作为上下文一起发过去；正在说的半句从不调用，失败时自动退回 Google。实测 DeepSeek 两分钟约 25 次请求、5,000 多个 token，费用不到一分钱人民币
 - 端口被占用：`lsof -ti:8765 | xargs kill` 后重启
 
 ## 🈯 翻译来源怎么选的
@@ -134,11 +165,16 @@ cd happysubs-server && .venv/bin/python server.py
 
 每一条 host permission 都对应代码里真实发生的事，没有"以防万一"的：
 
-- `www.youtube.com` / `vimeo.com` / `player.vimeo.com` / `www.bilibili.com` —— 扩展运行的页面
+- `www.youtube.com` / `vimeo.com` / `player.vimeo.com` / `www.bilibili.com` —— 扩展自动运行的页面
+- `*.zoom.us` / `www.youtube-nocookie.com` —— **可选**，装上时不授予，在欢迎页或弹窗里点「启用」后才自动运行（做成可选，是为了老用户更新时不被 Chrome 停用）
+- `*://*/*` —— **可选**，从不整体申请。只用于让你对某一个网站点「以后自动启用」时，单独申请那一个网站
 - `captions.vimeo.com` / `api.bilibili.com` —— 这两个站放字幕文件的地方，要 fetch
 - 五个翻译服务域名 —— 只在你选中某一家时才会请求它
 
-不申请 `tabs`（弹窗只要当前标签页 URL，上面的 host permission 已经够），也不申请 `scripting`（脚本全部通过 manifest 静态声明注入）。
+不申请 `tabs`（弹窗只要当前标签页 URL，`activeTab` 和上面的 host permission 已经够）。
+
+- `activeTab` + `scripting` —— 在上面列表之外的页面上，**只有你点开扩展图标时**才把脚本注入当前标签页；不点就不运行，也不需要"读取所有网站"的权限
+- `offscreen` + `tabCapture`（**可选**）—— 实时听译抓整个标签页声音时用。`tabCapture` 只在直接取音频失败时才请求；音频只发给本机的识别服务
 
 实时听译不需要任何 host permission——它连的是本机 `127.0.0.1`。
 
@@ -147,6 +183,9 @@ cd happysubs-server && .venv/bin/python server.py
 - Vimeo 播放器的类名是构建哈希（`Captions_module_captions__5ed5b89b`），代码只依赖 `.vp-video-wrapper`、`.vp-captions`、`#cc-control-bar-button` 这些稳定名字，Vimeo 改版可能需要跟进
 - 在 `vimeo.com` 观看页上拿不到 `playerConfig`，多语言轨道只能靠 DOM 里的 `<track>` 元素枚举；`player.vimeo.com`（含嵌入播放器）能拿到全量列表
 - `.vtt` 的签名 URL 有有效期，扩展只在打开视频时取一次
+- 实时听译能识别中文、英语、日语、韩语、粤语；其他语言（如越南语）不支持
+- Zoom 的转录稿栏是按文字内容匹配段落的（Zoom 的类名是构建哈希），Zoom 改版可能需要跟进；栏里的译文固定用免费的 Google 翻译
+- 其他网页上只能读标准字幕轨（`<track>` / `TextTrack`）。播放器自己画字幕、不走字幕轨的网站读不到，只能用实时听译
 - 默认模式下，如果实在读不出播放器的字幕开关状态（站点改版、或没有控制条的嵌入播放器且没有字幕轨），叠加层会选择**不显示**——宁可不显示，也不要在用户没要求时凭空放一行字幕上去。这种情况下勾上「仅显示翻译字幕」即可
 
 ## 🧪 测试
@@ -160,6 +199,15 @@ python3 -m http.server 8794
 详见 [test/README.md](test/README.md)。
 
 ## 📝 更新日志
+
+### 2.2.0
+
+- 新增 **Zoom 录像**：双语字幕、转录稿栏译文、导出双语文稿
+- **嵌在其他网站里的 YouTube** 也有双语字幕了
+- **更多网站**：支持 Coursera 等
+- **实时听译**：每句说完后用第二个模型（SenseVoice）重新识别，更准、带标点；新增日语、韩语、粤语；本地视频也能用；译文整句出现、不再跳动；可以单独选用 AI 翻译和 API Key，翻译时参考前两句。已经装过识别服务的，重新运行一次安装命令即可
+- **界面语言**：新增繁体中文、日文、越南文
+- YouTube 自动翻译字幕时会换回原文
 
 ### 2.1.2
 

@@ -10,8 +10,29 @@
     en: {
       pageTitle: "Welcome to HappySubs",
       eyebrow: "Installed",
+      moreTitle: "Turn on auto",
+      moreNote: "Turn on auto for these sites and subtitles appear as soon as they open.\nOr click the HappySubs icon whenever you need them.",
+      moreZoomTitle: "Zoom recordings",
+      moreZoomBody: "",
+      moreEmbedTitle: "YouTube's privacy-enhanced player on other sites",
+      moreEmbedBody: "",
+      moreEnable: "Turn on auto",
+      moreEnabled: "✓ Auto on",
+      moreTurnOff: "Click to turn off",
+      newEyebrow: "Updated to 2.2.0",
+      langCardTitle: "Interface language",
+      langCardBody: "繁體中文, 日本語 and Tiếng Việt added",
+      newHeadline: "New: <em>Zoom recordings</em>,<br>and more YouTube on other sites.",
+      newLede: "Turn on auto and subtitles appear as soon as the site opens.\nOr click the HappySubs icon whenever you need them.",
+      logTitle: "What changed in 2.2.0",
+      log1: "<strong>Zoom recordings</strong>: bilingual subtitles, a translated transcript panel, and a bilingual transcript export.",
+      log2: "<strong>YouTube embedded in other sites</strong> now gets bilingual subtitles.",
+      log3: "<strong>More sites</strong> such as Coursera.",
+      log4: "<strong>Live transcription</strong>: more accurate, with punctuation; understands Japanese, Korean and Cantonese too; works on local video files. The translation appears a whole sentence at a time and stays put, and can use your own AI translator and key. Already installed the recogniser? Run the install command once more.",
+      log5: "<strong>Interface languages</strong>: Traditional Chinese, Japanese and Vietnamese added.",
+      log6: "When YouTube auto-translates captions, HappySubs switches back to the original.",
       headline: "You're set.<br>On YouTube, <em>turn on CC</em> first.",
-      lede: "HappySubs translates the captions a video already has. On Vimeo and Bilibili there's nothing to switch on.",
+      lede: "HappySubs translates the captions a video already has. On Vimeo, Bilibili and Zoom recordings there's nothing to switch on.",
       demoAlt: "Demo: the HappySubs icon in the toolbar, then a click on the player's CC button, and the subtitle appears in two languages.",
       demoBadge: "DEMO",
       step1Title: "Pin it to the toolbar",
@@ -37,8 +58,29 @@
     zh: {
       pageTitle: "HappySubs 已安装",
       eyebrow: "已安装",
+      moreTitle: "开启自动启用",
+      moreNote: "为以下网站打开自动启用，打开网站即出字幕。\n也可在需要时点击 HappySubs 图标，打开字幕。",
+      moreZoomTitle: "Zoom 录像",
+      moreZoomBody: "",
+      moreEmbedTitle: "其他网站里的「隐私增强」YouTube 播放器",
+      moreEmbedBody: "",
+      moreEnable: "自动启用",
+      moreEnabled: "✓ 已自动启用",
+      moreTurnOff: "点击关闭",
+      newEyebrow: "已更新到 2.2.0",
+      langCardTitle: "界面语言",
+      langCardBody: "新增繁體中文、日本語、Tiếng Việt",
+      newHeadline: "新增：<em>Zoom 录像</em>，<br>和更多其他网站里的 YouTube。",
+      newLede: "开启自动启用，打开网站即出字幕。\n也可在需要时点击 HappySubs 图标，打开字幕。",
+      logTitle: "2.2.0 更新了什么",
+      log1: "<strong>Zoom 录像</strong>：双语字幕、转录稿栏译文、导出双语文稿。",
+      log2: "<strong>嵌在其他网站里的 YouTube</strong> 也有双语字幕了。",
+      log3: "<strong>更多网站</strong>：支持 Coursera 等。",
+      log4: "<strong>实时听译</strong>：识别更准、带标点；新增日语、韩语、粤语；本地视频也能用。译文整句出现、不再跳动，还可以单独选用 AI 翻译和 API Key。已经装过识别服务的，重新运行一次安装命令即可。",
+      log5: "<strong>界面语言</strong>：新增繁体中文、日文、越南文。",
+      log6: "YouTube 自动翻译字幕时，HappySubs 会换回原文。",
       headline: "装好了。<br>在 YouTube 上，先<em>打开 CC</em>。",
-      lede: "HappySubs 翻译的是视频自带的字幕。Vimeo 和 B\u2060站 上什么都不用开。",
+      lede: "HappySubs 翻译的是视频自带的字幕。Vimeo、B\u2060站 和 Zoom 录像上什么都不用开。",
       demoAlt: "演示：工具栏里的 HappySubs 图标，然后点下播放器的 CC，字幕以两种语言出现。",
       demoBadge: "演示",
       step1Title: "固定到工具栏",
@@ -64,8 +106,29 @@
     "zh-Hant": {
       pageTitle: "HappySubs 已安裝",
       eyebrow: "已安裝",
+      moreTitle: "開啟自動啟用",
+      moreNote: "為以下網站打開自動啟用，打開網站即出字幕。\n也可在需要時點擊 HappySubs 圖示，打開字幕。",
+      moreZoomTitle: "Zoom 錄影",
+      moreZoomBody: "",
+      moreEmbedTitle: "其他網站裡的「隱私強化」YouTube 播放器",
+      moreEmbedBody: "",
+      moreEnable: "自動啟用",
+      moreEnabled: "✓ 已自動啟用",
+      moreTurnOff: "點擊關閉",
+      newEyebrow: "已更新到 2.2.0",
+      langCardTitle: "介面語言",
+      langCardBody: "新增繁體中文、日本語、Tiếng Việt",
+      newHeadline: "新增：<em>Zoom 錄影</em>，<br>和更多其他網站裡的 YouTube。",
+      newLede: "開啟自動啟用，打開網站即出字幕。\n也可在需要時點擊 HappySubs 圖示，打開字幕。",
+      logTitle: "2.2.0 更新了什麼",
+      log1: "<strong>Zoom 錄影</strong>：雙語字幕、逐字稿欄譯文、匯出雙語文稿。",
+      log2: "<strong>嵌在其他網站裡的 YouTube</strong> 也有雙語字幕了。",
+      log3: "<strong>更多網站</strong>：支援 Coursera 等。",
+      log4: "<strong>即時聽譯</strong>：辨識更準、附標點；新增日語、韓語、粵語；本機影片也能用。譯文整句出現、不再跳動，還可以單獨選用 AI 翻譯和 API Key。已經裝過辨識服務的，重新執行一次安裝指令即可。",
+      log5: "<strong>介面語言</strong>：新增繁體中文、日文、越南文。",
+      log6: "YouTube 自動翻譯字幕時，HappySubs 會換回原文。",
       headline: "裝好了。<br>在 YouTube 上，先<em>開啟 CC</em>。",
-      lede: "HappySubs 翻譯的是影片內建的字幕。Vimeo 和 B⁠站 上什麼都不用開。",
+      lede: "HappySubs 翻譯的是影片內建的字幕。Vimeo、B⁠站 和 Zoom 錄影上什麼都不用開。",
       demoAlt: "示範：工具列裡的 HappySubs 圖示，然後點下播放器的 CC，字幕以兩種語言出現。",
       demoBadge: "示範",
       step1Title: "固定到工具列",
@@ -91,8 +154,29 @@
     ja: {
       pageTitle: "HappySubs へようこそ",
       eyebrow: "インストール完了",
+      moreTitle: "自動で有効にする",
+      moreNote: "以下のサイトで自動を有効にすると、開くだけで字幕が出ます。\n必要なときに HappySubs のアイコンを押して表示することもできます。",
+      moreZoomTitle: "Zoom の録画",
+      moreZoomBody: "",
+      moreEmbedTitle: "他サイトの「プライバシー強化」YouTube プレーヤー",
+      moreEmbedBody: "",
+      moreEnable: "自動で有効",
+      moreEnabled: "✓ 自動で有効",
+      moreTurnOff: "クリックでオフ",
+      newEyebrow: "2.2.0 に更新",
+      langCardTitle: "表示言語",
+      langCardBody: "繁體中文・日本語・Tiếng Việt を追加",
+      newHeadline: "新機能：<em>Zoom の録画</em>、<br>他サイト内の YouTube にも対応拡大。",
+      newLede: "自動で有効にすると、サイトを開くだけで字幕が出ます。\n必要なときに HappySubs のアイコンを押して表示することもできます。",
+      logTitle: "2.2.0 の変更点",
+      log1: "<strong>Zoom の録画</strong>：二言語字幕、文字起こしパネルの翻訳、二言語文字起こしの書き出し。",
+      log2: "<strong>他サイトに埋め込まれた YouTube</strong> でも二言語字幕が使えます。",
+      log3: "<strong>対応サイトの追加</strong>：Coursera など。",
+      log4: "<strong>リアルタイム文字起こし</strong>：認識の精度が上がり、句読点付きに。日本語・韓国語・広東語に対応し、ローカルの動画でも使えます。翻訳は1文ずつ表示されて途中で変わらず、AI 翻訳と API キーを個別に設定できます。認識プログラムを入れ済みの方は、インストールコマンドをもう一度実行してください。",
+      log5: "<strong>表示言語</strong>：繁体字中国語、日本語、ベトナム語を追加。",
+      log6: "YouTube が字幕を自動翻訳している場合は原文に戻します。",
       headline: "準備完了。<br>YouTubeでは<em>CCをオン</em>に。",
-      lede: "HappySubs は動画にもともとある字幕を翻訳します。Vimeo と Bilibili では何もオンにする必要はありません。",
+      lede: "HappySubs は動画にもともとある字幕を翻訳します。Vimeo、Bilibili、Zoom の録画では何もオンにする必要はありません。",
       demoAlt: "デモ：ツールバーの HappySubs アイコン、続いてプレーヤーの CC ボタンをクリックすると、字幕が2言語で表示されます。",
       demoBadge: "デモ",
       step1Title: "ツールバーに固定",
@@ -118,8 +202,29 @@
     vi: {
       pageTitle: "Chào mừng đến với HappySubs",
       eyebrow: "Đã cài đặt",
+      moreTitle: "Bật tự động",
+      moreNote: "Bật tự động cho các trang dưới đây để phụ đề hiện ngay khi mở.\nHoặc bấm biểu tượng HappySubs khi cần.",
+      moreZoomTitle: "Bản ghi Zoom",
+      moreZoomBody: "",
+      moreEmbedTitle: "Trình phát YouTube bảo mật nâng cao trên trang khác",
+      moreEmbedBody: "",
+      moreEnable: "Tự động bật",
+      moreEnabled: "✓ Đang tự bật",
+      moreTurnOff: "Bấm để tắt",
+      newEyebrow: "Đã cập nhật 2.2.0",
+      langCardTitle: "Ngôn ngữ giao diện",
+      langCardBody: "Thêm 繁體中文, 日本語 và Tiếng Việt",
+      newHeadline: "Mới: <em>bản ghi Zoom</em>,<br>và thêm YouTube trên trang khác.",
+      newLede: "Bật tự động để phụ đề hiện ngay khi mở trang.\nHoặc bấm biểu tượng HappySubs khi cần.",
+      logTitle: "Có gì mới trong 2.2.0",
+      log1: "<strong>Bản ghi Zoom</strong>: phụ đề song ngữ, bản dịch trong bảng chép lời, xuất bản chép lời song ngữ.",
+      log2: "<strong>YouTube nhúng trên trang khác</strong> giờ có phụ đề song ngữ.",
+      log3: "<strong>Thêm trang</strong> như Coursera.",
+      log4: "<strong>Phụ đề trực tiếp</strong>: chính xác hơn, có dấu câu; nhận dạng thêm tiếng Nhật, tiếng Hàn, tiếng Quảng Đông; dùng được với tệp video trên máy. Bản dịch hiện cả câu và không đổi nữa, có thể chọn dịch bằng AI và API key riêng. Đã cài chương trình nhận dạng thì chạy lại lệnh cài đặt một lần.",
+      log5: "<strong>Ngôn ngữ giao diện</strong>: thêm tiếng Trung phồn thể, tiếng Nhật và tiếng Việt.",
+      log6: "Khi YouTube tự dịch phụ đề, HappySubs chuyển về bản gốc.",
       headline: "Xong rồi.<br>Hãy <em>bật CC</em> trên YouTube.",
-      lede: "HappySubs dịch phụ đề có sẵn của video. Trên Vimeo và Bilibili thì không cần bật gì cả.",
+      lede: "HappySubs dịch phụ đề có sẵn của video. Trên Vimeo, Bilibili và bản ghi Zoom thì không cần bật gì cả.",
       demoAlt: "Minh họa: biểu tượng HappySubs trên thanh công cụ, sau đó bấm nút CC của trình phát, phụ đề hiện ra bằng hai ngôn ngữ.",
       demoBadge: "MINH HỌA",
       step1Title: "Ghim lên thanh công cụ",
@@ -193,6 +298,14 @@
     for (const el of document.querySelectorAll("[data-html]")) el.innerHTML = t[el.dataset.html];
     for (const el of document.querySelectorAll("[data-aria]")) el.setAttribute("aria-label", t[el.dataset.aria]);
 
+    // Opened by an update, not an install: lead with what is new.
+    if (WHATS_NEW) {
+      document.querySelector("[data-t='eyebrow']").textContent = t.newEyebrow;
+      document.querySelector("[data-html='headline']").innerHTML = t.newHeadline;
+      document.querySelector("[data-t='lede']").textContent = t.newLede;
+    }
+    paintSiteButtons(t);
+
     const key = isMac() ? "<kbd>⌘</kbd> <kbd>⇧</kbd> <kbd>S</kbd>" : "<kbd>Alt</kbd> <kbd>Shift</kbd> <kbd>S</kbd>";
     document.getElementById("tipShortcut").innerHTML = t.tipShortcut.replace("{key}", key);
 
@@ -200,8 +313,59 @@
     buildPicker(document.getElementById("secondLang"), secondLang);
 
     document.getElementById("pageLang").value = uiLang;
+    document.getElementById("pageLang2").value = uiLang;
   }
 
+  // Opened by an update rather than an install (background.js adds ?new=).
+  const WHATS_NEW = new URLSearchParams(location.search).has("new");
+  if (WHATS_NEW) document.body.classList.add("whatsnew");
+  // The switches for the optional sites go in the headline column on both
+  // versions of the page: they are the one thing here that needs a click.
+  {
+    const more = document.getElementById("more");
+    const head = document.querySelector(".first .head");
+    if (more && head) head.appendChild(more);
+    // The language switch follows on the update page, under the box.
+    const langRow = document.getElementById("langRow");
+    if (WHATS_NEW && langRow && head) head.appendChild(langRow);
+  }
+
+  // The two sites that are optional permissions. A button rather than a
+  // prompt on arrival: the request has to come from a click, and until it is
+  // granted the extension cannot even tell the viewer is on that site.
+  const SITE_ORIGINS = {
+    zoom: ["https://*.zoom.us/*"],
+    embed: ["*://www.youtube-nocookie.com/*"]
+  };
+  let siteStrings = null;
+
+  async function paintSiteButtons(t) {
+    if (t) siteStrings = t;
+    for (const btn of document.querySelectorAll(".more-btn")) {
+      let on = false;
+      try { on = await chrome.permissions.contains({ origins: SITE_ORIGINS[btn.dataset.site] }); } catch {}
+      btn.classList.toggle("on", on);
+      btn.textContent = on ? siteStrings.moreEnabled : siteStrings.moreEnable;
+      btn.title = on ? siteStrings.moreTurnOff : "";
+    }
+    // Draw the eye here while something is still off; once both are on there
+    // is nothing left to ask for.
+    const more = document.getElementById("more");
+    if (more) more.classList.toggle("ask", [...document.querySelectorAll(".more-btn")].some(b => !b.classList.contains("on")));
+  }
+
+  // A switch, not a one-way door: what was granted here can be taken back
+  // here, without a trip to Chrome's extension settings.
+  for (const btn of document.querySelectorAll(".more-btn")) {
+    btn.addEventListener("click", async () => {
+      const origins = SITE_ORIGINS[btn.dataset.site];
+      try {
+        if (btn.classList.contains("on")) await chrome.permissions.remove({ origins });
+        else await chrome.permissions.request({ origins });
+      } catch {}
+      paintSiteButtons();
+    });
+  }
   function showDemo(secondLang) {
     const [src, tr] = demoLines(secondLang);
     document.getElementById("demoSrc").textContent = src;
@@ -261,12 +425,16 @@
     // The switch here is the panel's own language setting, not just this
     // page's: someone who flips it on their first screen wants the popup in
     // that language too, and would otherwise have to find the setting again.
-    document.getElementById("pageLang").addEventListener("change", (e) => {
+    const pickUiLang = (e) => {
       current = STRINGS[e.target.value] ? e.target.value : "en";
       if (typeof ydsSetUiLang === "function") ydsSetUiLang(current);
       fill(STRINGS[current], current, secondLang);
       saveSetting({ uiLang: current });
-    });
+    };
+    document.getElementById("pageLang").addEventListener("change", pickUiLang);
+    // The same switch again on the update page, next to the news that there
+    // are more languages to switch to.
+    document.getElementById("pageLang2").addEventListener("change", pickUiLang);
 
     // Saved the moment it is picked: there is no "done" to press, and the
     // demo beside it switches to the chosen language as proof.

@@ -259,7 +259,8 @@
       which: "entry.372882796",     // 具体是哪个 (the site, video or extension, when asked)
       notes: "entry.1694125152",    // 补充说明
       version: "entry.186220609",   // 插件版本, from ?v= on this page's URL
-      lang: "entry.1675081698"      // 界面语言: en | zh | zh-Hant | ja | vi, whichever the page was showing
+      lang: "entry.1675081698",     // 界面语言: en | zh | zh-Hant | ja | vi, whichever the page was showing
+      os: "entry.90183482"          // 系统: macOS | Windows | Linux | ChromeOS | …, read by this page
     };
     const REASON_LABELS = {
       "not-needed": "不再需要了",
@@ -344,6 +345,11 @@
       const raw = params.get("v") || "";
       const version = /^[0-9][0-9.]{0,19}$/.test(raw) ? raw : "";
       const picked = () => form.querySelector("input[name=reason]:checked");
+      // The operating system only, as the browser reports it to any page.
+      const os = (navigator.userAgentData && navigator.userAgentData.platform)
+        || (/Mac/.test(navigator.platform) ? "macOS" : /Win/.test(navigator.platform) ? "Windows"
+          : /CrOS/.test(navigator.userAgent) ? "ChromeOS" : /Linux/.test(navigator.platform) ? "Linux"
+          : navigator.platform || "");
 
       form.addEventListener("change", (e) => {
         if (e.target.name !== "reason") return;
@@ -371,6 +377,7 @@
         if (FORM.notes) body.set(FORM.notes, document.getElementById("notes").value.trim());
         if (FORM.version) body.set(FORM.version, version);
         if (FORM.lang) body.set(FORM.lang, lang);
+        if (FORM.os) body.set(FORM.os, os);
         send.disabled = true;
         status.textContent = SENDING[lang] || SENDING.en;
         try {

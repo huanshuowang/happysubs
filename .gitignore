@@ -25,6 +25,9 @@ dist/
 # binaries and the model is ~300MB from the sherpa-onnx project's releases.
 server/.venv/
 server/model/
+server/model-sensevoice/
+# Optional recordings the recogniser saves with HAPPYSUBS_DEBUG_AUDIO=1.
+server/debug-audio-*.wav
 
 # My own paperwork: the release checklist and the crib sheet for the Chrome Web
 # Store form. Chore lists for one person, not documentation anyone cloning the

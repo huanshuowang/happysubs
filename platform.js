@@ -265,9 +265,32 @@
   // =========================================================================
 
   function createYouTube(ctx) {
+    // An embedded player inside another site's page. Its URL may carry the id
+    // (/embed/<id>) or nothing at all, when the host page picks the video
+    // through the iframe API — then only the player knows, and inject-youtube.js
+    // tells us with the track list.
+    const isEmbed = /^\/embed\//.test(location.pathname);
+    let playerVideoId = null;
+
     function videoIdFromUrl() {
       const m = /[?&]v=([^&]+)/.exec(location.search);
-      return m ? m[1] : null;
+      if (m) return m[1];
+      if (!isEmbed) return null;
+      // What the player says it is playing wins over the URL: the host page
+      // can load another video into the same frame.
+      const e = /^\/embed\/([\w-]{11})/.exec(location.pathname);
+      return playerVideoId || (e && e[1]) || null;
+    }
+
+    // An embed's video is whatever the host page last loaded into it. When
+    // that changes, the previous video's cues must go — they used to stay on
+    // screen over the new one, because no URL changed to say so.
+    function noteEmbedVideo(id) {
+      if (!isEmbed || !id || id === playerVideoId) return;
+      const before = videoIdFromUrl();
+      playerVideoId = id;
+      if (before && before !== id) ctx.videoChanged();
+      else ctx.adoptVideoId();
     }
 
     // How long after its last word a cue may stay up. Enough to finish reading
@@ -353,6 +376,17 @@
       // native track OR our own translation.
       if (/[?&]tlang=/.test(url)) {
         ctx.log("intercept: skipping tlang track");
+        // The player is auto-translating, so the original never reaches us.
+        // Ask it to drop the translation; it then fetches the plain track,
+        // which is the one we can use. This is also the moment that matters:
+        // the translation often only kicks in when CC is switched on, well
+        // after the track list (the other trigger) was published.
+        const s = ctx.settings() || {};
+        if (s.enabled && s.secondLang) {
+          window.dispatchEvent(new CustomEvent("YDS_CLEAR_AUTO_TRANSLATE", {
+            detail: { languageCode: s.secondLang }
+          }));
+        }
         return;
       }
 
@@ -360,6 +394,10 @@
       // Only accept the track whose v= matches the video the user is watching.
       const vMatch = /[?&]v=([^&]+)/.exec(url);
       const trackVideoId = vMatch ? vMatch[1] : null;
+      // An embed never prefetches for other videos, so a caption request for
+      // a different id means the host page switched video — often seen here
+      // first, before the track list catches up.
+      if (isEmbed && trackVideoId) noteEmbedVideo(trackVideoId);
       const pageVideoId = videoIdFromUrl();
       if (trackVideoId && pageVideoId && trackVideoId !== pageVideoId) {
         ctx.log("intercept: skipping track for other video", trackVideoId, "current", pageVideoId);
@@ -476,13 +514,16 @@
     return {
       id: "youtube",
       requiresCcForTracks: true,
-      looksLikeVideoPage: () => true,
+      // We run in every youtube.com frame now (for embeds), and youtube.com
+      // has frames of its own — only the top page and players count.
+      looksLikeVideoPage: () => window.top === window || isEmbed,
       getVideoId: videoIdFromUrl,
       videoTitle: () => metaContent(
         "ytd-watch-metadata h1 yt-formatted-string",
         "h1.ytd-watch-metadata",
         'meta[name="title"]',
-        'meta[property="og:title"]'
+        'meta[property="og:title"]',
+        ".ytp-title-link"
       ),
       videoAuthor: () => metaContent(
         "ytd-video-owner-renderer ytd-channel-name a",
@@ -494,8 +535,13 @@
       getContainer: () => document.querySelector("#movie_player") || document.querySelector(".html5-video-container"),
       isCcOn() {
         const btn = document.querySelector(".ytp-subtitles-button");
-        if (!btn || !btn.hasAttribute("aria-pressed")) return null;
-        return btn.getAttribute("aria-pressed") === "true";
+        if (btn && btn.hasAttribute("aria-pressed")) return btn.getAttribute("aria-pressed") === "true";
+        // No button we recognise (the newer embed UI): the player's own answer,
+        // published by inject-youtube.js.
+        const fromPlayer = document.documentElement.dataset.ydsCc;
+        if (fromPlayer === "1") return true;
+        if (fromPlayer === "0") return false;
+        return null;
       },
       nativeLines,
       // How much of the bottom of the player the controls cover right now, in
@@ -528,6 +574,7 @@
       start() {
         injectPageScript("inject-youtube.js", "yds-inject-youtube");
         window.addEventListener("YDS_TRACK_LIST", (e) => {
+          if (e.detail && e.detail.videoId) noteEmbedVideo(e.detail.videoId);
           ctx.onTrackList((e.detail && e.detail.tracks) || []);
           // YouTube remembers the caption choice across videos, so an
           // auto-translation left switched on keeps coming back on every video
@@ -1136,20 +1183,555 @@
     };
   }
 
+  // ---------- Zoom (cloud recordings) ----------
+  //
+  // The recording player (*.zoom.us/rec/play/…, /rec/share/…) boots by asking
+  // /nws/recording/1.0/play/info/<id> for everything about the clip, and that
+  // JSON already carries the whole audio transcript as transcriptList —
+  // [{ts, end_ts, text, username}] with "HH:MM:SS.mmm" times. The info id is
+  // not the one in the page URL, so rather than derive it we read the URL the
+  // player itself requested off the resource timing buffer, then fetch it
+  // again with the viewer's cookies. No main-world patching needed.
+  //
+  // There is exactly one track: whatever the host's audio transcript is. A
+  // recording without "Audio transcript" enabled has an empty list, which is
+  // the case live transcription is for.
+
+  function createZoom(ctx) {
+    let infoUrl = "";
+    let track = null;         // {languageCode, kind, name, cues}
+    let pollTimer = null;
+    let loaded = false;
+    // The transcript as Zoom wrote it: one entry per paragraph of its side
+    // panel, with who said it. Kept apart from the cues, which content.js
+    // re-cuts into display-sized sentences and so loses both.
+    let entries = [];         // [{start, end, text, speaker}]
+    let entryTexts = new Set();
+    let panelRoot = null;
+
+    function videoEl() {
+      return document.querySelector(".video-js video") || document.querySelector("video");
+    }
+
+    function videoKey() {
+      const m = location.pathname.match(/\/rec\/(?:play|share)\/([^/?#]+)/);
+      return m ? m[1] : null;
+    }
+
+    function findInfoUrl() {
+      try {
+        const hit = performance.getEntriesByType("resource")
+          .map(e => e.name)
+          .find(n => n.includes("/nws/recording/1.0/play/info/"));
+        return hit || "";
+      } catch {
+        return "";
+      }
+    }
+
+    function tsSeconds(s) {
+      const m = String(s || "").match(/(?:(\d+):)?(\d+):(\d+(?:\.\d+)?)/);
+      if (!m) return NaN;
+      return (Number(m[1]) || 0) * 3600 + Number(m[2]) * 60 + Number(m[3]);
+    }
+
+    // Zoom does not say what language the transcript is in. It is English far
+    // more often than not, so only switch away when the script says otherwise.
+    function guessLang(cues) {
+      const sample = cues.slice(0, 80).map(c => c.text).join("");
+      const count = re => (sample.match(re) || []).length;
+      const total = sample.replace(/\s/g, "").length || 1;
+      if (count(/[぀-ヿ]/g) / total > 0.05) return "ja";
+      if (count(/[가-힯]/g) / total > 0.2) return "ko";
+      if (count(/[一-鿿]/g) / total > 0.2) return "zh";
+      return "en";
+    }
+
+    async function loadInfo() {
+      const url = findInfoUrl();
+      if (!url || url === infoUrl) return;
+      infoUrl = url;
+      let data;
+      try {
+        const r = await fetch(url, { credentials: "include" });
+        data = await r.json();
+      } catch (e) {
+        infoUrl = "";
+        ctx.log("zoom: play/info unavailable", e);
+        return;
+      }
+      const list = (data && data.result && data.result.transcriptList) || [];
+      entries = list
+        .map(x => ({
+          start: tsSeconds(x.ts),
+          end: tsSeconds(x.end_ts),
+          text: normPanelText(x.text),
+          speaker: String(x.username || "").trim()
+        }))
+        .filter(e => e.text && e.end > e.start)
+        .sort((a, b) => a.start - b.start);
+      // Who is speaking is written into the text, not the username field:
+      // where the voice changes, Zoom starts the entry with "name: " (the
+      // username field stayed on the recording's owner throughout a lecture
+      // with three speakers). The label is the speaker from there until the
+      // next one, and it is not something to show or translate as subtitle.
+      let speaking = "";
+      for (const e of entries) {
+        const m = SPEAKER_LABEL.exec(e.text);
+        if (m) {
+          speaking = m[1].trim();
+          e.spoken = e.text.slice(m[0].length).trim();
+        } else {
+          e.spoken = e.text;
+        }
+        if (speaking) e.speaker = speaking;
+      }
+      // The panel may show a paragraph with or without its label.
+      entryTexts = new Set();
+      for (const e of entries) { entryTexts.add(e.text); entryTexts.add(e.spoken); }
+      panelRoot = null;
+      const cues = entries
+        .map(e => ({ start: e.start, end: e.end, text: cleanCueText(e.spoken) }))
+        .filter(c => c.text);
+      if (!cues.length) {
+        ctx.log("zoom: no audio transcript on this recording");
+        ctx.onTrackList([]);
+        return;
+      }
+      const languageCode = guessLang(cues);
+      track = { languageCode, kind: "asr", name: "Audio transcript", cues };
+      loaded = false;
+      ctx.log(`zoom: ${cues.length} transcript cues (${languageCode})`);
+      ctx.onTrackList([{ languageCode, kind: "asr", name: track.name }]);
+      // content.js only asks for a track when it is already in the target
+      // language. The transcript is the only source there is, so hand it over
+      // now, the way Vimeo does with its source track.
+      ingestTrack("transcript");
+    }
+
+    // "Robertas Gabrys: ", "irwin: ", "workshop@iu.edu: " — up to three
+    // words with no sentence punctuation, then a colon, at the very start.
+    const SPEAKER_LABEL = /^([^\s:,.!?…]+(?: [^\s:,.!?…]+){0,2}): (?=\S)/;
+
+    function normPanelText(s) {
+      return String(s || "").replace(/\s+/g, " ").trim();
+    }
+
+    // The paragraphs of Zoom's "Audio Transcript" panel. Found by their text,
+    // not Zoom's class names, which are build hashes and change without notice:
+    // an element whose own text is exactly one transcript entry is a paragraph.
+    // The first full-page scan settles on the panel's root, and later scans
+    // stay inside it.
+    function panelParagraphs() {
+      if (!entryTexts.size) return [];
+      const scope = (panelRoot && panelRoot.isConnected) ? panelRoot : document.body;
+      const found = [];
+      const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT);
+      const seen = new Set();
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        const el = n.parentElement;
+        if (!el || seen.has(el) || el.closest(".yds-overlay, .yds-panel-tr, .yds-panel-hint, video")) continue;
+        seen.add(el);
+        const text = normPanelText(ownPanelText(el));
+        if (text && entryTexts.has(text)) found.push({ el, text });
+      }
+      if (scope === document.body && found.length >= 2) {
+        // Lowest element holding the first two paragraphs: the panel's list.
+        let root = found[0].el.parentElement;
+        while (root && !root.contains(found[1].el)) root = root.parentElement;
+        panelRoot = root || null;
+      }
+      return found;
+    }
+
+    // The paragraph's text without the translation line content.js puts
+    // inside it — otherwise a paragraph stops matching the moment it has one.
+    function ownPanelText(el) {
+      let out = "";
+      for (const n of el.childNodes) {
+        if (n.nodeType === 1 && (n.classList.contains("yds-panel-tr") || n.classList.contains("yds-panel-hint"))) continue;
+        out += n.textContent;
+      }
+      return out;
+    }
+
+    function speakerAt(t) {
+      let lo = 0, hi = entries.length - 1, hit = -1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (entries[mid].start <= t) { hit = mid; lo = mid + 1; } else hi = mid - 1;
+      }
+      return hit >= 0 ? entries[hit].speaker : "";
+    }
+
+    function ingestTrack(reason) {
+      if (!track || loaded) return;
+      loaded = true;
+      ctx.log(`zoom: ingest ${track.cues.length} cues (${reason})`);
+      ctx.ingest({
+        cues: ctx.coalesce(track.cues),
+        lang: track.languageCode,
+        isAsr: true,
+        key: `zoom|${track.languageCode}|${track.cues.length}|${track.cues[0].start.toFixed(3)}`
+      });
+    }
+
+    // Video.js draws captions into .vjs-text-track-display; Zoom's own CC
+    // overlay lives inside the same player box under its own class names.
+    function zoomCaptionNodes() {
+      const root = videoEl() && videoEl().closest(".video-js");
+      if (!root) return [];
+      const nodes = root.querySelectorAll(
+        ".vjs-text-track-display .vjs-text-track-cue > div, [class*='caption'] span, [class*='subtitle'] span"
+      );
+      return [...nodes].filter(n => (n.innerText || "").trim() && !n.closest(".vjs-modal-dialog"));
+    }
+
+    return {
+      id: "zoom",
+      // The transcript arrives with the page, CC button or not.
+      requiresCcForTracks: false,
+      looksLikeVideoPage: () => /\/rec\/(play|share)\//.test(location.pathname),
+      getVideoId: videoKey,
+      // The tab title is "<topic> - Zoom".
+      videoTitle: () => document.title.replace(/\s*-\s*Zoom\s*$/i, "").trim(),
+      videoAuthor: () => "",
+      getVideoEl: videoEl,
+      getContainer() {
+        const v = videoEl();
+        if (!v) return null;
+        return v.closest(".video-js") || v.parentElement;
+      },
+      isCcOn() {
+        return zoomCaptionNodes().length > 0;
+      },
+      nativeLines() {
+        return zoomCaptionNodes()
+          .map(n => (n.innerText || "").replace(/\s+/g, " ").trim())
+          .filter(Boolean);
+      },
+      // Zoom's control bar is video.js's own, floating over the bottom of the
+      // picture; video.js fades it out (opacity 0) while playing untouched.
+      controlsInset() {
+        const v = videoEl();
+        const root = v && v.closest(".video-js");
+        if (!root) return 0;
+        const bar = root.querySelector(".vjs-control-bar");
+        if (!bar) return 0;
+        const cs = getComputedStyle(bar);
+        if (cs.display === "none" || cs.visibility === "hidden" || Number(cs.opacity) < 0.05) return 0;
+        let top = bar.getBoundingClientRect().top;
+        const progress = bar.querySelector(".vjs-progress-control");
+        if (progress) top = Math.min(top, progress.getBoundingClientRect().top);
+        return Math.max(0, root.getBoundingClientRect().bottom - top);
+      },
+      nativeCaptionWidth: () => widestLineWidth(zoomCaptionNodes()),
+      nativeCaptionBox: () => captionBox(zoomCaptionNodes()),
+      captionEls: zoomCaptionNodes,
+      // Optional extras content.js uses when an adapter has them: who is
+      // speaking at a time (for the exported transcript), and the side panel's
+      // paragraphs (to put a translation under each).
+      speakerAt,
+      transcriptPanelItems: panelParagraphs,
+      observeTarget() {
+        const v = videoEl();
+        return (v && v.closest(".video-js")) || document.body;
+      },
+      start() {
+        loadInfo();
+        if (!pollTimer) pollTimer = setInterval(loadInfo, 1500);
+      },
+      requestTrack(plain) {
+        if (track && plain.languageCode === track.languageCode) ingestTrack("requested");
+      },
+      forgetLoadedCues() {
+        loaded = false;
+      },
+      reset() {
+        infoUrl = "";
+        track = null;
+        loaded = false;
+        entries = [];
+        entryTexts = new Set();
+        panelRoot = null;
+      }
+    };
+  }
+
+  // ---------- any other page ----------
+  //
+  // Not declared in the manifest: the popup injects us through activeTab when
+  // the viewer opens it on a page with a <video> that no adapter above claims —
+  // a course site, a news player, a local .mp4 opened as file://.
+  //
+  // Captions, when the page has them, come from the standard place: the
+  // video's TextTrack list, fed by <track> elements or added by the player in
+  // script. Coursera, edX, TED and most news and course players use it. The
+  // browser has already fetched and parsed the file, so we read cues straight
+  // off the track — no URL, no CORS, no format to parse. Players that draw
+  // captions from their own data without a TextTrack are not covered; live
+  // transcription is the answer there, as it is for a page with no captions.
+  //
+  // "Somewhere to draw" is the hard part. A strange page's video has no known
+  // positioned wrapper, and Chrome's own file viewer puts the <video> straight
+  // in a flex-centred <body>. Rather than restyle someone else's DOM we lay a
+  // fixed, click-through box exactly over the video and keep it there.
+  //
+
+  function createGeneric(ctx) {
+    let stage = null;
+    let follow = 0;
+    let current = null;
+    let trackTimer = null;
+    let lastSignature = "";
+    const loadedKeys = new Set();
+    // Tracks we switched from "disabled" to "hidden" ourselves, to get their
+    // cues loaded. Their mode says nothing about whether the viewer wants
+    // captions, so isCcOn ignores them.
+    const ourHidden = new WeakSet();
+    let cuesHidden = false;
+
+    function captionTracks(v) {
+      if (!v || !v.textTracks) return [];
+      return [...v.textTracks].filter(t => t.kind === "subtitles" || t.kind === "captions");
+    }
+
+    function plain(t) {
+      return { languageCode: t.language || "", kind: "", name: t.label || t.language || "" };
+    }
+
+    // The one the viewer is watching beats the page's default. With neither
+    // — the site's captions are off, and we are reading a track by ourselves
+    // — it has to be a guess at the language being spoken: the page's own
+    // language, then English, then whatever is first. Never the viewer's
+    // target language: that one is a translation to show, not a source.
+    function sourceTrack(v) {
+      const list = captionTracks(v);
+      if (!list.length) return null;
+      const els = v ? [...v.querySelectorAll("track")] : [];
+      const defaultTrack = (els.find(e => e.default) || {}).track;
+      const showing = list.find(t => t.mode === "showing");
+      if (showing) return showing;
+      if (defaultTrack && list.includes(defaultTrack)) return defaultTrack;
+      const target = (ctx.settings() || {}).secondLang || "";
+      const usable = list.filter(t => !(t.language && ctx.langMatches(target, t.language)));
+      const pool = usable.length ? usable : list;
+      const pageLang = (document.documentElement.lang || "").split("-")[0].toLowerCase();
+      const byLang = (code) => code && pool.find(t => (t.language || "").toLowerCase().split("-")[0] === code);
+      return byLang(pageLang) || byLang("en") || pool[0];
+    }
+
+    // A disabled track never loads its cues; hidden loads them without
+    // drawing. Cues can also still be on their way, so poll briefly.
+    async function cuesOf(t) {
+      if (t.mode === "disabled") {
+        t.mode = "hidden";
+        ourHidden.add(t);
+      }
+      for (let i = 0; i < 20 && !(t.cues && t.cues.length); i++) {
+        await new Promise(r => setTimeout(r, 250));
+      }
+      return t.cues ? [...t.cues] : [];
+    }
+
+    async function loadTrack(t, reason) {
+      const key = `${t.language}|${t.label}|${t.cues ? t.cues.length : 0}`;
+      if (loadedKeys.has(key)) return;
+      loadedKeys.add(key);
+      const raw = await cuesOf(t);
+      const cues = raw
+        .map(c => ({
+          start: c.startTime,
+          end: c.endTime,
+          // VTTCue.text keeps markup (<i>, <c.color>, voice tags); the
+          // shared cleaner strips it the same way it does for other sites.
+          text: cleanCueText(c.text || "")
+        }))
+        .filter(c => c.text && c.end > c.start)
+        .sort((a, b) => a.start - b.start);
+      if (!cues.length) {
+        loadedKeys.delete(key);
+        return;
+      }
+      const lang = t.language || "";
+      ctx.log(`generic: ${cues.length} cues from track ${lang || "(no lang)"} (${reason})`);
+      ctx.ingest({
+        cues: ctx.coalesce(cues),
+        lang,
+        isAsr: false,
+        isNativeTarget: !!lang && ctx.langMatches(ctx.settings().secondLang, lang),
+        key: `generic|${lang}|${cues.length}|${cues[0].start.toFixed(3)}`
+      });
+    }
+
+    function refreshTracks() {
+      const v = videoEl();
+      const list = captionTracks(v);
+      const signature = list.map(t => `${t.language}|${t.label}`).join(",");
+      if (signature !== lastSignature) {
+        lastSignature = signature;
+        ctx.log("generic: tracks →", signature || "(none)");
+        ctx.onTrackList(list.map(plain));
+      }
+      // content.js only asks for a track already in the target language, so
+      // the source is ours to load — the same arrangement as Vimeo.
+      const src = sourceTrack(v);
+      if (src) loadTrack(src, "source");
+    }
+
+    // The video worth subtitling: one that is playing beats one that is not,
+    // then the biggest on screen. Re-picked every frame, so starting a second
+    // video on the page moves the subtitle to it.
+    function videoEl() {
+      const vids = [...document.querySelectorAll("video")].filter(v => {
+        const r = v.getBoundingClientRect();
+        return r.width > 80 && r.height > 60;
+      });
+      if (!vids.length) return null;
+      const score = v => {
+        const r = v.getBoundingClientRect();
+        return (v.paused ? 0 : 1e9) + r.width * r.height;
+      };
+      return vids.sort((a, b) => score(b) - score(a))[0];
+    }
+
+    // The box is a manual popover, which puts it in the browser's top layer.
+    // That is what keeps the subtitle visible in fullscreen: a fullscreen
+    // element hides everything outside itself except other top-layer
+    // elements, and a <video> cannot have children to draw inside it. The top
+    // layer stacks in the order things entered it, so the box is re-shown
+    // after every fullscreen change to sit above the new fullscreen element.
+    function raiseStage() {
+      if (!stage || typeof stage.showPopover !== "function") return;
+      try { if (stage.matches(":popover-open")) stage.hidePopover(); } catch {}
+      try { stage.showPopover(); } catch {}
+    }
+
+    function ensureStage() {
+      if (stage && stage.isConnected) return stage;
+      stage = document.createElement("div");
+      stage.id = "yds-generic-stage";
+      stage.setAttribute("popover", "manual");
+      // The browser's popover defaults (centred, bordered, opaque, clipped)
+      // are all undone here; what is left is a transparent positioning box.
+      stage.style.cssText =
+        "position:fixed;left:0;top:0;right:auto;bottom:auto;width:0;height:0;" +
+        "margin:0;padding:0;border:0;background:transparent;color:inherit;" +
+        "pointer-events:none;z-index:2147483646;overflow:visible;";
+      (document.body || document.documentElement).appendChild(stage);
+      raiseStage();
+      document.addEventListener("fullscreenchange", raiseStage);
+      return stage;
+    }
+
+    function track() {
+      follow = requestAnimationFrame(track);
+      const v = videoEl();
+      if (!v || !stage) return;
+      current = v;
+      const r = v.getBoundingClientRect();
+      const s = stage.style;
+      const next = [r.left, r.top, r.width, r.height].map(n => `${Math.round(n)}px`);
+      if (s.left !== next[0]) s.left = next[0];
+      if (s.top !== next[1]) s.top = next[1];
+      if (s.width !== next[2]) s.width = next[2];
+      if (s.height !== next[3]) s.height = next[3];
+    }
+
+    return {
+      id: "generic",
+      requiresCcForTracks: false,
+      looksLikeVideoPage: () => !!document.querySelector("video"),
+      // Per page, not per video: there is no id to read, and the URL is what
+      // separates one local file from the next.
+      getVideoId: () => location.href.split("#")[0],
+      videoTitle() {
+        const t = document.title || "";
+        if (t) return t;
+        // file:// viewer: the title is empty, the file name is the identity.
+        return decodeURIComponent(location.pathname.split("/").pop() || "");
+      },
+      videoAuthor: () => "",
+      getVideoEl: () => current || videoEl(),
+      getContainer() {
+        if (!videoEl()) return null;
+        return ensureStage();
+      },
+      // "On" whenever the video has a caption track at all. Elsewhere the
+      // overlay follows the player's CC button, so that closing captions
+      // closes ours too. Here there is no button we know how to read or
+      // press, and the viewer turned the extension on for this page by hand:
+      // making them also find the site's own caption menu before anything
+      // shows was a second step with no purpose. We can load the track
+      // ourselves, so we do, and the extension's own switch is the off.
+      isCcOn() {
+        return captionTracks(current || videoEl()).length > 0;
+      },
+      nativeLines() {
+        const t = captionTracks(current || videoEl()).find(x => x.mode === "showing");
+        if (!t || !t.activeCues) return [];
+        return [...t.activeCues].map(c => cleanCueText(c.text || "")).filter(Boolean);
+      },
+      nativeCaptionWidth: () => 0,
+      nativeCaptionBox: () => null,
+      captionEls: () => [],
+      // The browser draws <track> captions itself, outside the DOM, so there
+      // is no element to hide; ::cue is the one handle on them (overlay.css).
+      hideNativeCues(on) {
+        const v = current || videoEl();
+        if (!v || cuesHidden === on) return;
+        cuesHidden = on;
+        v.classList.toggle("yds-hide-cues", on);
+      },
+      observeTarget: () => document.body,
+      start() {
+        ensureStage();
+        if (!follow) track();
+        refreshTracks();
+        // Players add their tracks after metadata loads, or on first play.
+        if (!trackTimer) trackTimer = setInterval(refreshTracks, 2000);
+      },
+      requestTrack(want) {
+        const t = captionTracks(current || videoEl())
+          .find(x => x.language === want.languageCode && (x.label || x.language) === want.name)
+          || captionTracks(current || videoEl()).find(x => x.language === want.languageCode);
+        if (t) loadTrack(t, "requested");
+      },
+      forgetLoadedCues() {
+        loadedKeys.clear();
+        lastSignature = "";
+      },
+      reset() {
+        current = null;
+        loadedKeys.clear();
+        lastSignature = "";
+      }
+    };
+  }
+
   // =========================================================================
 
   window.YDS_PLATFORMS = {
     detect() {
       const h = location.hostname;
-      if (/(^|\.)youtube\.com$/.test(h)) return "youtube";
+      if (/(^|\.)youtube(-nocookie)?\.com$/.test(h)) return "youtube";
       if (/(^|\.)vimeo\.com$/.test(h)) return "vimeo";
       if (/(^|\.)bilibili\.com$/.test(h)) return "bilibili";
+      // Only recordings: the rest of zoom.us (the web client, the dashboard)
+      // has nothing for the Zoom adapter and falls through to generic.
+      if (/(^|\.)zoom\.us$/.test(h) && /\/rec\/(play|share)\//.test(location.pathname)) return "zoom";
+      // Set by the popup right before it injects us through activeTab. Last,
+      // so a site we know but have not been granted yet (Zoom, before the
+      // viewer allows it) still gets its own adapter when injected by hand.
+      if (window.YDS_FORCE_GENERIC) return "generic";
       return null;
     },
     create(id, ctx) {
       if (id === "youtube") return createYouTube(ctx);
       if (id === "vimeo") return createVimeo(ctx);
       if (id === "bilibili") return createBilibili(ctx);
+      if (id === "zoom") return createZoom(ctx);
+      if (id === "generic") return createGeneric(ctx);
       return null;
     }
   };
